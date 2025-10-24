@@ -1,0 +1,98 @@
+# AWS AgentCore QuickStart .gitignore
+
+# AgentCore CLI generated files
+.bedrock_agentcore/
+.bedrock_agentcore.yaml
+.bedrock/
+
+# CDK
+infra/cdk.out/
+infra/cdk.context.json
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# AWS
+.aws/
+*.pem
+*.key
+
+# Logs
+*.log
+logs/
+
+# Test files
+test_*.py
+test_*.json
+*_test.py
+
+# Temporary files
+*.tmp
+*.temp
+response.json
+*.response
+
+# Client deployment outputs (keep structure, ignore specific client data)
+client-deployments/*/deployment-*.log
+client-deployments/*/cdk-outputs.json
+client-deployments/*/cloudformation-template.yaml
+client-deployments/*/monitor-deployment.sh
+client-deployments/*/deployment-info.json
+client-deployments/*/client-handoff-summary.md
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Coverage reports
+coverage/
+*.lcov
+
+# Build artifacts
+dist/
+build/
+*.tgz
+*.tar.gz
+
+# Docker
+.dockerignore
+Dockerfile.local
+
+# Backup files
+*.bak
+*.backup
