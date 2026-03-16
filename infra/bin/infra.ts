@@ -1,23 +1,15 @@
 #!/usr/bin/env node
-import 'source-map-support/register';
-import * as cdk from 'aws-cdk-lib';
-import { AgentCoreStack } from '../lib/agentcore-stack';
+import "source-map-support/register.js";
+import * as cdk from "aws-cdk-lib";
+import { AgentCoreStack } from "../lib/agentcore-stack.js";
 
 const app = new cdk.App();
 
-// AgentCore QuickStart Stack
-new AgentCoreStack(app, 'AgentCoreQuickStartStack', {
-  /* If you don't specify 'env', this stack will be environment-agnostic.
-   * Account/Region-dependent features and context lookups will not work,
-   * but a single synthesized template can be deployed anywhere. */
-
-  /* Uncomment the next line to specialize this stack for the AWS Account
-   * and Region that are implied by the current CLI configuration. */
-  // env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
-
-  /* Uncomment the next line if you know exactly what Account and Region you
-   * want to deploy the stack to. */
-  // env: { account: '123456789012', region: 'us-east-1' },
-
-  /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
+new AgentCoreStack(app, "AgentCoreQuickStartStack", {
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION,
+  },
+  description:
+    "AgentCore QuickStart — full boilerplate with Runtime, Memory, Gateway, Code Interpreter, Browser, Guardrails, and Observability",
 });

@@ -1,186 +1,183 @@
 # Deployment Guide
 
-## Prerequisites
+## One-Command Deploy
 
-1. **AWS CLI Setup**
 ```bash
-aws configure --profile <aws-profile>
-# Enter: Access Key ID, Secret Access Key, Region (<aws-region>), Output (json)
+./scripts/deploy-agentcore.sh -p <your-aws-profile>
 ```
 
-2. **Required Tools**
+This runs:
+1. Pre-flight checks (AWS CLI, Docker, Node.js, credentials)
+2. CDK bootstrap (if version < 30)
+3. `npm install` for CDK dependencies
+4. TypeScript compilation
+5. Docker image build (ARM64 container for Runtime)
+6. `cdk deploy` (CloudFormation stack creation)
+7. API health check
+
+Outputs are saved to `cdk-outputs.json`.
+
+### Options
+
 ```bash
-# Node.js 18+
-node --version
-
-# AWS CDK
-npm install -g aws-cdk
-
-# AgentCore CLI
-pip install bedrock-agentcore-starter-toolkit
+./scripts/deploy-agentcore.sh -p <profile>              # Deploy
+./scripts/deploy-agentcore.sh -p <profile> -r us-west-2  # Different region
+./scripts/deploy-agentcore.sh -p <profile> --dry-run      # Synth only
 ```
 
-## Quick Deployment
+## Manual Deploy
 
-### 1. Deploy Infrastructure
 ```bash
 cd infra
 npm install
-npx cdk deploy --profile <aws-profile>
+npx tsc
+npx cdk deploy --require-approval never --profile <profile>
 ```
 
-### 2. Deploy Agent
+## Post-Deploy Setup
+
 ```bash
-cd ../agentcore_agents
-agentcore configure --entrypoint app.py --name agentcore_quickstart --region <aws-region> --non-interactive
-agentcore launch
+AWS_PROFILE=<profile> bash scripts/post-deploy.sh
 ```
 
-### 3. Test Deployment
+This displays stack outputs and provides instructions for:
+- Enabling CloudWatch Transaction Search (OTEL traces)
+- Setting up AgentCore Policy (Cedar authorization on Gateway)
+
+### Tavily Web Search (Optional)
+
+The agent works without Tavily. To enable web search:
+
 ```bash
-agentcore invoke '{"prompt": "Calculate 15 * 8 + 42"}'
-agentcore invoke '{"prompt": "What time is it now?"}'
+aws secretsmanager put-secret-value \
+  --secret-id agentcore/tavily-api-key \
+  --secret-string '{"api_key":"YOUR_TAVILY_KEY"}' \
+  --profile <profile>
 ```
 
-## Production Deployment
+Get a key at https://tavily.com/
 
-### 1. Use Deployment Script
+## What Gets Deployed
+
+### AgentCore Components
+
+| Resource | CloudFormation Type | Purpose |
+|----------|-------------------|---------|
+| Runtime | `AWS::BedrockAgentCore::Runtime` | Agent compute (Firecracker microVM, ARM64 container) |
+| Memory | `AWS::BedrockAgentCore::Memory` | STM + LTM with 3 extraction strategies |
+| Gateway | `AWS::BedrockAgentCore::Gateway` | MCP endpoint for agent-to-agent (no targets — add your own) |
+| Code Interpreter | `AWS::BedrockAgentCore::CodeInterpreterCustom` | Sandboxed code execution |
+| Browser | `AWS::BedrockAgentCore::BrowserCustom` | Managed Chrome with S3 recording |
+
+### Bedrock
+
+| Resource | Type | Purpose |
+|----------|------|---------|
+| Guardrail | `AWS::Bedrock::Guardrail` | Content filters + PII detection |
+| Guardrail Version | `AWS::Bedrock::GuardrailVersion` | Pinned guardrail version |
+
+### Infrastructure
+
+| Resource | Purpose |
+|----------|---------|
+| API Gateway | REST API with Cognito auth, CORS, throttling (100 RPS) |
+| Lambda | Bridge: API GW -> Runtime invocation |
+| Cognito User Pool | Shared auth (API GW + Gateway), client credentials flow |
+| Cognito Domain | OAuth token endpoint |
+| S3 Bucket | Artifacts, browser recordings, CloudTrail logs |
+| CloudTrail | API audit logging |
+| CloudWatch | Log groups, metric filters, alarms |
+| SNS Topic | Alert notifications |
+| Secrets Manager | Tavily API key |
+
+## Authentication Flow
+
+```
+Client App
+    |
+    v
+Cognito (client_credentials grant)
+    |
+    v  Bearer token
+API Gateway (validates token, requires write scope)
+    |
+    v
+Lambda (IAM invokes Runtime)
+    |
+    v
+AgentCore Runtime (processes request)
+```
+
+### Getting a Token
+
 ```bash
-cd scripts
-./deploy-agentcore.sh <client-name> <aws-profile>
+# From cdk-outputs.json
+CLIENT_ID=<UserPoolClientId>
+POOL_ID=<UserPoolId>
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text --profile <profile>)
+
+# Get client secret
+CLIENT_SECRET=$(aws cognito-idp describe-user-pool-client \
+  --user-pool-id $POOL_ID --client-id $CLIENT_ID \
+  --profile <profile> --query "UserPoolClient.ClientSecret" --output text)
+
+# Get token
+curl -s -X POST \
+  "https://agentcore-qs-${ACCOUNT_ID}.auth.us-east-1.amazoncognito.com/oauth2/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -u "$CLIENT_ID:$CLIENT_SECRET" \
+  -d "grant_type=client_credentials&scope=agentcore-quickstart-api/read agentcore-quickstart-api/write"
 ```
 
-### 2. Verify Resources
-```bash
-# Check API Gateway
-aws apigateway get-rest-apis --profile <aws-profile>
+## Changing the Model
 
-# Check Lambda functions
-aws lambda list-functions --profile <aws-profile>
+Default model is Claude Haiku 4.5. Change via CDK env var in `infra/lib/agentcore-stack.ts`:
 
-# Check DynamoDB tables
-aws dynamodb list-tables --profile <aws-profile>
-```
-
-## Environment Configuration
-
-### 1. Secrets Management
-```bash
-# Store Tavily API key
-aws secretsmanager create-secret \
-    --name "agentcore/tavily-api-key" \
-    --secret-string "your-tavily-api-key" \
-    --profile <aws-profile>
-```
-
-### 2. Environment Variables
-```bash
-# Set in Lambda function
-aws lambda update-function-configuration \
-    --function-name AgentCoreIntegrationLambda \
-    --environment Variables='{
-        "REGION":"us-east-1",
-        "AGENTCORE_RUNTIME_ARN":"arn:aws:bedrock-agentcore:us-east-1:ACCOUNT:runtime/agentcore_quickstart-XXXXX"
-    }' \
-    --profile <aws-profile>
-```
-
-## Monitoring Setup
-
-### 1. CloudWatch Alarms
-```bash
-# Check existing alarms
-aws cloudwatch describe-alarms --profile <aws-profile>
-```
-
-### 2. Log Monitoring
-```bash
-# Monitor agent logs
-aws logs tail /aws/bedrock-agentcore/runtimes/agentcore_quickstart-XXXXX-DEFAULT \
-    --log-stream-name-prefix "2025/10/24/[runtime-logs]" \
-    --profile <aws-profile>
-```
-
-## Scaling Configuration
-
-### 1. Lambda Concurrency
 ```typescript
-// In CDK stack
-const agentCoreLambda = new lambda.Function(this, 'AgentCoreIntegrationLambda', {
-  reservedConcurrentExecutions: 100
-});
+MODEL_ID: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
 ```
 
-### 2. DynamoDB Auto-scaling
-```typescript
-// In CDK stack
-const memoryTable = new dynamodb.Table(this, 'AgentCoreMemoryTable', {
-  billingMode: dynamodb.BillingMode.PAY_PER_REQUEST
-});
+Or override at deploy time by modifying the `environmentVariables` block. Make sure the model is enabled in your account's Bedrock model access.
+
+## Updating the Agent Code
+
+1. Edit `agentcore_agents/app.py`
+2. Redeploy: `./scripts/deploy-agentcore.sh -p <profile>`
+
+CDK rebuilds the Docker image and creates a new Runtime version. Existing sessions continue on the old version; new sessions use the updated code.
+
+## Cleanup
+
+```bash
+cd infra && npx cdk destroy --force --profile <profile>
+```
+
+If Cognito User Pool deletion fails (domain exists), delete the domain first:
+
+```bash
+aws cognito-idp delete-user-pool-domain \
+  --user-pool-id <pool-id> \
+  --domain agentcore-qs-<account-id> \
+  --profile <profile>
+
+# Then retry destroy
+npx cdk destroy --force --profile <profile>
 ```
 
 ## Troubleshooting
 
-### Common Issues
+### "Runtime initialization time exceeded" (30s timeout)
 
-1. **Agent Launch Fails**
-```bash
-# Check CloudWatch logs
-aws logs tail /aws/bedrock-agentcore/runtimes/agentcore_quickstart-XXXXX-DEFAULT \
-    --log-stream-name-prefix "2025/10/24/[runtime-logs]" \
-    --profile <aws-profile>
-```
+The Docker image is too heavy. Keep `requirements.txt` lean — avoid large packages like `playwright` in requirements (the Strands tool wrappers handle their own deps lazily).
 
-2. **Tool Execution Errors**
-```bash
-# Check Lambda logs
-aws logs tail /aws/lambda/AgentCoreIntegrationLambda \
-    --profile <aws-profile>
-```
+### "AccessDeniedException" on model invocation
 
-3. **API Gateway Issues**
-```bash
-# Test API endpoint
-curl -X POST https://your-api-gateway-url/agent \
-    -H "Content-Type: application/json" \
-    -d '{"prompt": "test"}'
-```
+The model isn't enabled in your account. Go to Bedrock Console > Model access > Enable the model. Or change `MODEL_ID` to an enabled model.
 
-### Debug Commands
+### API Gateway returns "Unauthorized"
 
-```bash
-# Test agent directly
-cd agentcore_agents
-agentcore invoke '{"prompt": "test message"}'
+Cognito token expired (1 hour TTL) or wrong scope. Re-fetch the token.
 
-# Check resource status
-aws cloudformation describe-stacks \
-    --stack-name AgentCoreQuickStartStack \
-    --profile <aws-profile>
-```
+### "Agent artifact type cannot be updated"
 
-## Rollback Procedures
-
-### 1. Rollback CDK Stack
-```bash
-npx cdk rollback --profile <aws-profile>
-```
-
-### 2. Rollback Agent
-```bash
-# Delete current agent
-agentcore delete agentcore_quickstart
-
-# Deploy previous version
-agentcore launch --version previous
-```
-
-## Security Checklist
-
-- [ ] IAM roles follow least privilege principle
-- [ ] Secrets stored in AWS Secrets Manager
-- [ ] API Gateway has proper authentication
-- [ ] Lambda functions have proper VPC configuration
-- [ ] DynamoDB tables have encryption enabled
-- [ ] CloudWatch logs are encrypted
-- [ ] X-Ray tracing is properly configured
+Can't switch between `fromCodeAsset` and `fromAsset` on an existing Runtime. Destroy and redeploy.

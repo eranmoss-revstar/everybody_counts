@@ -8,6 +8,20 @@
 # CDK
 infra/cdk.out/
 infra/cdk.context.json
+cdk-outputs.json
+
+# Client deployments
+client-deployments/
+
+# Internal planning docs (not for remote)
+docs/plans/
+
+# Sell sheet use-case directories (maintained on separate branches)
+agentcore_agents/document_processing/
+agentcore_agents/workflow_automation/
+
+# Claude Code
+.claude/
 
 # Node.js
 node_modules/
