@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import "source-map-support/register.js";
 import * as cdk from "aws-cdk-lib";
-import { AgentCoreStack } from "../lib/agentcore-stack.js";
+import { AgentCoreStack } from "../lib/agentcore-stack";
 
 const app = new cdk.App();
 
