@@ -248,7 +248,14 @@ export class AgentCoreStack extends Stack {
 
     // ─── AgentCore Runtime ─────────────────────────────────────────────────
     const agentRuntimeArtifact = agentcore.AgentRuntimeArtifact.fromAsset(
-      join(__dirname, "../../agentcore_agents"),
+      join(__dirname, "../../agentcore_agents"),{
+        buildArgs: {
+          // Example where you can ensure the built image is multi-arch in case host builder is other arch like AMD_64, x86, etc
+          ///builder: 'test-builder-that-has-arm64-support',
+        },
+        platform: Platform.LINUX_ARM64,
+      }
+      
     );
 
     const runtime = new agentcore.Runtime(this, "AgentCoreRuntime", {
