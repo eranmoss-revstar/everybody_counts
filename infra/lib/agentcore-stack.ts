@@ -511,6 +511,62 @@ export class AgentCoreStack extends Stack {
       displayName: "AgentCore QuickStart Alerts",
     });
 
+    const highAgentUserErrorssAlarm = new cloudwatch.Alarm(this, 'AgentCoreUserErrorsAlarm', {
+      alarmName: 'high-user-user-errors-in-agentcore-hit',
+        alarmDescription: 'Alert for when AWS Bedrock Agentcore has high number of user errors',
+        metric: new cloudwatch.Metric({
+          metricName: 'UserErrors',
+          dimensionsMap: {
+            Resource: 'runtime-arn',
+            Name: 'runtime-name',
+            Operation: 'InvokeAgentRuntime',
+          },
+          statistic: 'Sum',
+        }),
+        threshold: 5,
+        evaluationPeriods: 10,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    const bedrockGuardrailHitsAlarm = new cloudwatch.Alarm(this, 'GuardrailsHitAlarm', {
+      alarmName: 'guardrails-being-hit',
+        alarmDescription: 'Alert for when AWS Bedrock Guardrails are hit',
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/Bedrock/Guardrails',
+          metricName: 'InvocationsIntervened',
+          dimensionsMap: {
+            GuardrailContentSource: 'Input',
+            GuardrailPolicyType: 'SensitiveInformationPolicy',
+            Operation: 'ApplyGuardrail',
+          },
+          statistic: 'Sum',
+        }),
+        threshold: 5,
+        evaluationPeriods: 10,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    const failedDocIngestAlarm = new cloudwatch.Alarm(this, 'RuntimeLengthAlarm', {
+      alarmName: 'kb-ingestion-failes',
+        alarmDescription: 'Alert for when OpenSearch KB has failed ingestions',
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/AOSS',
+          metricName: 'IngestionDocumentErrors',
+          dimensionsMap: {
+            CollectionName: 'input-kb-collection',
+            CollectionId: 'id-of-above-collection',
+            ClientId: 'aws-account-number',
+          },
+          statistic: 'Sum',
+        }),
+        threshold: 5,
+        evaluationPeriods: 10,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
     // ─── Outputs ───────────────────────────────────────────────────────────
     new CfnOutput(this, "ApiUrl", {
       value: api.url,
