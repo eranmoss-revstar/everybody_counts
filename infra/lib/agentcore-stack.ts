@@ -15,6 +15,7 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
+import * as cw_actions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as cloudtrail from "aws-cdk-lib/aws-cloudtrail";
 import * as bedrock from "aws-cdk-lib/aws-bedrock";
@@ -517,6 +518,54 @@ export class AgentCoreStack extends Stack {
       topicName: "agentcore-quickstart-alerts",
       displayName: "AgentCore QuickStart Alerts",
     });
+
+    // ─── CloudWatch Alarms ─────────────────────────────────────────────────
+    // Each alarm publishes to alertTopic so subscribers (email, Slack, pager)
+    // are notified. Dimension keys/values use CDK token refs so they resolve
+    // to the actual deployed resource at synth.
+
+    const userErrorsAlarm = new cloudwatch.Alarm(this, "AgentCoreUserErrorsAlarm", {
+      alarmName: "agentcore-runtime-user-errors-high",
+      alarmDescription:
+        "AgentCore Runtime is returning a high number of user errors (malformed requests, auth failures, etc.).",
+      metric: new cloudwatch.Metric({
+        namespace: "bedrock-agentcore",
+        metricName: "UserErrors",
+        dimensionsMap: {
+          ResourceArn: runtime.agentRuntimeArn,
+          Operation: "InvokeAgentRuntime",
+        },
+        statistic: "Sum",
+        period: Duration.minutes(5),
+      }),
+      threshold: 5,
+      evaluationPeriods: 3,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    const guardrailInterventionsAlarm = new cloudwatch.Alarm(this, "GuardrailInterventionsAlarm", {
+      alarmName: "bedrock-guardrail-interventions-high",
+      alarmDescription:
+        "Bedrock Guardrails is intervening on a high number of invocations.",
+      metric: new cloudwatch.Metric({
+        namespace: "AWS/Bedrock/Guardrails",
+        metricName: "InvocationsIntervened",
+        dimensionsMap: {
+          GuardrailArn: guardrail.attrGuardrailArn,
+        },
+        statistic: "Sum",
+        period: Duration.minutes(5),
+      }),
+      threshold: 5,
+      evaluationPeriods: 3,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    const snsAction = new cw_actions.SnsAction(alertTopic);
+    userErrorsAlarm.addAlarmAction(snsAction);
+    guardrailInterventionsAlarm.addAlarmAction(snsAction);
 
     // ─── Outputs ───────────────────────────────────────────────────────────
     new CfnOutput(this, "ApiUrl", {
