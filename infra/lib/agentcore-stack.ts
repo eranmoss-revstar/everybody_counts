@@ -19,6 +19,7 @@ import * as sns from "aws-cdk-lib/aws-sns";
 import * as cloudtrail from "aws-cdk-lib/aws-cloudtrail";
 import * as bedrock from "aws-cdk-lib/aws-bedrock";
 import * as agentcore from "@aws-cdk/aws-bedrock-agentcore-alpha";
+import { Platform } from "aws-cdk-lib/aws-ecr-assets";
 import { join } from "path";
 
 export class AgentCoreStack extends Stack {
@@ -247,15 +248,14 @@ export class AgentCoreStack extends Stack {
     });
 
     // ─── AgentCore Runtime ─────────────────────────────────────────────────
+    // AgentCore Runtime requires ARM64. Set the target platform on the CDK
+    // asset so the build is host-agnostic (works on x86 CI, Intel Mac, Apple
+    // Silicon) via docker buildx + QEMU instead of pinning the Dockerfile FROM.
     const agentRuntimeArtifact = agentcore.AgentRuntimeArtifact.fromAsset(
-      join(__dirname, "../../agentcore_agents"),{
-        buildArgs: {
-          // Example where you can ensure the built image is multi-arch in case host builder is other arch like AMD_64, x86, etc
-          ///builder: 'test-builder-that-has-arm64-support',
-        },
+      join(__dirname, "../../agentcore_agents"),
+      {
         platform: Platform.LINUX_ARM64,
-      }
-      
+      },
     );
 
     const runtime = new agentcore.Runtime(this, "AgentCoreRuntime", {
