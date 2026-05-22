@@ -20,8 +20,10 @@ import * as sns from "aws-cdk-lib/aws-sns";
 import * as cloudtrail from "aws-cdk-lib/aws-cloudtrail";
 import * as bedrock from "aws-cdk-lib/aws-bedrock";
 import * as agentcore from "@aws-cdk/aws-bedrock-agentcore-alpha";
+import { Fn } from "aws-cdk-lib";
 import { Platform } from "aws-cdk-lib/aws-ecr-assets";
 import { join } from "path";
+import { OSS_EXPORTS, KB_ROLE_NAME } from "./oss-foundation-stack";
 
 export class AgentCoreStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -646,6 +648,80 @@ export class AgentCoreStack extends Stack {
     new CfnOutput(this, "BridgeLambdaArn", {
       value: agentCoreLambda.functionArn,
       description: "AgentCore Integration Lambda ARN",
+    });
+
+    // ─── OSS Foundation (deployed separately as OSSFoundationStack) ───────
+    // Roles, collection, and access policy all live in the foundation stack.
+    // Importing them here ensures the access policy was created after the roles
+    // existed, so AOSS has already validated these principals.
+    const collectionArn = Fn.importValue(OSS_EXPORTS.collectionArn);
+    const collectionEndpoint = Fn.importValue(OSS_EXPORTS.collectionEndpoint);
+
+    // ─── Import pre-existing IAM roles from OSSFoundationStack ────────────
+    const kbRole = iam.Role.fromRoleName(this, "KnowledgeBaseRole", KB_ROLE_NAME);
+
+    // S3 access is added here because the bucket lives in this stack
+    kbRole.attachInlinePolicy(new iam.Policy(this, "KBRoleS3Policy", {
+      statements: [new iam.PolicyStatement({
+        actions: ["s3:GetObject", "s3:ListBucket"],
+        resources: [agentCoreBucket.bucketArn, `${agentCoreBucket.bucketArn}/uploads/*`],
+      })],
+    }));
+
+    // ─── Bedrock Knowledge Base ────────────────────────────────────────────
+    // The vector index "everybody-counts-index" must exist in the AOSS collection
+    // before this KB is created. It was created once via the console (AOSS has no
+    // native CFN resource for vector indices, and the Custom Resource Lambda was
+    // blocked by the OpenSearch security plugin layer).
+    const knowledgeBase = new bedrock.CfnKnowledgeBase(this, "EverybodyCountsKB", {
+      name: "everybody-counts-kb",
+      description: "Everybody Counts KS1 math teaching materials",
+      roleArn: kbRole.roleArn,
+      knowledgeBaseConfiguration: {
+        type: "VECTOR",
+        vectorKnowledgeBaseConfiguration: {
+          embeddingModelArn: `arn:aws:bedrock:${this.region}::foundation-model/amazon.titan-embed-text-v2:0`,
+        },
+      },
+      storageConfiguration: {
+        type: "OPENSEARCH_SERVERLESS",
+        opensearchServerlessConfiguration: {
+          collectionArn: collectionArn,
+          vectorIndexName: "everybody-counts-index",
+          fieldMapping: {
+            vectorField: "embedding",
+            textField: "text",
+            metadataField: "metadata",
+          },
+        },
+      },
+    });
+    const dataSource = new bedrock.CfnDataSource(this, "EverybodyCountsDataSource", {
+      knowledgeBaseId: knowledgeBase.attrKnowledgeBaseId,
+      name: "everybody-counts-uploads",
+      description: "Admin-uploaded teaching materials (PDF, DOCX, PPTX)",
+      dataSourceConfiguration: {
+        type: "S3",
+        s3Configuration: {
+          bucketArn: agentCoreBucket.bucketArn,
+          inclusionPrefixes: ["uploads/"],
+        },
+      },
+    });
+
+    new CfnOutput(this, "KnowledgeBaseId", {
+      value: knowledgeBase.attrKnowledgeBaseId,
+      description: "Bedrock Knowledge Base ID",
+    });
+
+    new CfnOutput(this, "DataSourceId", {
+      value: dataSource.attrDataSourceId,
+      description: "Bedrock KB Data Source ID",
+    });
+
+    new CfnOutput(this, "OSSCollectionArn", {
+      value: collectionArn,
+      description: "OpenSearch Serverless Collection ARN (from OSSFoundationStack)",
     });
   }
 }

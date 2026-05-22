@@ -1,0 +1,22 @@
+version: 1
+applications:
+  - frontend:
+      phases:
+        preBuild:
+          commands:
+            - echo "Installing dependencies..."
+            - npm ci --legacy-peer-deps
+        build:
+          commands:
+            - echo "Building React app..."
+            - npm run build
+            - echo "Build completed"
+            - ls -la build/
+      artifacts:
+        baseDirectory: build
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+    appRoot: .
