@@ -96,6 +96,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         timestamp: new Date().toISOString(),
         metadata: {
           source: data.citation ?? undefined,
+          sources: data.sources && data.sources.length > 0 ? data.sources : undefined,
         },
       };
 

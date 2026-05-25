@@ -8,6 +8,7 @@ export interface ChatResponse {
   citation: string | null;
   sessionId: string | null;
   followUpSuggestions: string[];
+  sources: string[];
 }
 
 export async function queryChat(
@@ -23,6 +24,7 @@ export async function queryChat(
       citation: null,
       sessionId: data.sessionId ?? null,
       followUpSuggestions: [],
+      sources: data.sources || [],
     };
   }
 
@@ -36,5 +38,6 @@ export async function queryChat(
     citation: null,
     sessionId: null,
     followUpSuggestions: data.follow_up_suggestions || [],
+    sources: [],
   };
 }

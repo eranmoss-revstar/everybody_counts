@@ -212,11 +212,21 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
               </div>
             )}
             
+            {/* KB Sources */}
+            {!isUser && message.metadata?.sources && (
+              <div className={`mt-2 pt-2 border-t text-xs transition-colors duration-300 ${
+                isDarkMode ? 'border-gray-700 text-gray-500' : 'border-gray-100 text-gray-400'
+              }`}>
+                <span className="font-medium">Sources: </span>
+                {message.metadata.sources.join(', ')}
+              </div>
+            )}
+
             {/* Timestamp */}
             <div className={`text-xs mt-2 transition-colors duration-300 ${
-              isUser 
-                ? 'text-blue-100' 
-                : isDarkMode 
+              isUser
+                ? 'text-blue-100'
+                : isDarkMode
                   ? 'text-gray-400'
                   : 'text-gray-500'
             }`}>

@@ -10,6 +10,7 @@ export interface Message {
     confidence?: number;
     follow_up_suggestions?: string[];
     raw_data?: any[];
+    sources?: string[];
   };
 }
 
