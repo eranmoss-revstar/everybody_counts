@@ -26,6 +26,8 @@ export interface ChatInterfaceProps {
   session: Session | null;
   onUpdateSession: (sessionId: string, updates: Partial<Session>) => void;
   onToggleSidebar: () => void;
+  pendingMessage?: string;
+  onClearPendingMessage?: () => void;
 }
 
 export interface SidebarProps {
@@ -34,6 +36,7 @@ export interface SidebarProps {
   onSessionSelect: (session: Session) => void;
   onCreateSession: () => void;
   onDeleteSession: (sessionId: string) => void;
+  onStartWithPrompt: (message: string) => void;
   isOpen: boolean;
   onToggle: () => void;
 }

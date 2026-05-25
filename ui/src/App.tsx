@@ -13,6 +13,7 @@ const AppContent: React.FC = () => {
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [timeoutToast, setTimeoutToast] = useState<string>('');
+  const [pendingMessage, setPendingMessage] = useState<string>('');
   const { isAuthenticated, isLoading, logout, user } = useAuth();
   const { isDarkMode, toggleTheme } = useTheme();
 
@@ -87,6 +88,19 @@ const AppContent: React.FC = () => {
     setCurrentSession(newSession);
   };
 
+  const startWithPrompt = (message: string): void => {
+    const newSession: Session = {
+      id: Date.now().toString(),
+      title: `New Chat ${sessions.length + 1}`,
+      messages: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    setSessions(prev => [newSession, ...prev]);
+    setCurrentSession(newSession);
+    setPendingMessage(message);
+  };
+
   const updateSession = (sessionId: string, updates: Partial<Session>): void => {
     setSessions(prevSessions =>
       prevSessions.map(session =>
@@ -149,6 +163,7 @@ const AppContent: React.FC = () => {
         onSessionSelect={setCurrentSession}
         onCreateSession={createNewSession}
         onDeleteSession={deleteSession}
+        onStartWithPrompt={startWithPrompt}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
       />
@@ -159,6 +174,8 @@ const AppContent: React.FC = () => {
           session={currentSession}
           onUpdateSession={updateSession}
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          pendingMessage={pendingMessage}
+          onClearPendingMessage={() => setPendingMessage('')}
         />
       </div>
 

@@ -11,6 +11,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   session,
   onUpdateSession,
   onToggleSidebar,
+  pendingMessage,
+  onClearPendingMessage,
 }) => {
   const [inputMessage, setInputMessage] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -22,6 +24,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { isDarkMode } = useTheme();
   const { getIdToken } = useAuth();
+
+  useEffect(() => {
+    if (pendingMessage && session && !isLoading) {
+      onClearPendingMessage?.();
+      handleSendMessage(pendingMessage);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingMessage, session?.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -62,14 +72,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, [isLoading]);
 
-  const handleSendMessage = async (): Promise<void> => {
-    if (!inputMessage.trim() || !session || isLoading) return;
+  const handleSendMessage = async (overrideMessage?: string): Promise<void> => {
+    const text = (overrideMessage || inputMessage).trim();
+    if (!text || !session || isLoading) return;
 
     sessionManager.extendSession();
 
     const userMessage = {
       id: Date.now().toString(),
-      content: inputMessage.trim(),
+      content: text,
       role: 'user' as const,
       timestamp: new Date().toISOString()
     };
@@ -77,7 +88,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     const updatedMessages = [...session.messages, userMessage];
     onUpdateSession(session.id, {
       messages: updatedMessages,
-      title: session.messages.length === 0 ? inputMessage.trim().substring(0, 50) : session.title
+      title: session.messages.length === 0 ? text.substring(0, 50) : session.title
     });
 
     setInputMessage('');
@@ -345,7 +356,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             </div>
 
             <button
-              onClick={handleSendMessage}
+              onClick={() => handleSendMessage()}
               disabled={!inputMessage.trim() || isLoading}
               className={`px-6 py-3 rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl min-w-[80px] justify-center flex items-center space-x-2 ${
                 isDarkMode

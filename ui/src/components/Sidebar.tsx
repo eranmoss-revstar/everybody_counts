@@ -17,12 +17,21 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
 
 
+const EXAMPLE_PROMPTS = [
+  "What does the Teacher Notes say about teaching tens and ones in Year 2?",
+  "What activities are suggested for teaching number bonds to 10 in Year 1?",
+  "What does the Maths Mastery training say about the concrete-pictorial-abstract approach?",
+  "How do I teach fractions to Year 5 pupils?",
+  "What are the best KS1 science activities for Year 1?",
+];
+
 const Sidebar: React.FC<SidebarProps> = ({
   sessions,
   currentSession,
   onSessionSelect,
   onCreateSession,
   onDeleteSession,
+  onStartWithPrompt,
   isOpen,
   onToggle,
 }) => {
@@ -242,6 +251,31 @@ const Sidebar: React.FC<SidebarProps> = ({
             <Plus className="w-4 h-4" />
             New Chat
           </button>
+        </div>
+
+        {/* Example Prompts */}
+        <div className={`px-4 pb-3 border-b transition-all duration-300 ${
+          isDarkMode ? 'border-gray-700/50' : 'border-gray-200/50'
+        }`}>
+          <p className={`text-xs font-medium mb-2 ${
+            isDarkMode ? 'text-gray-500' : 'text-gray-400'
+          }`}>Try asking:</p>
+          <div className="space-y-1">
+            {EXAMPLE_PROMPTS.map((prompt, i) => (
+              <button
+                key={i}
+                onClick={() => onStartWithPrompt(prompt)}
+                className={`w-full text-left text-xs px-3 py-2 rounded-lg transition-all duration-200 truncate ${
+                  isDarkMode
+                    ? 'text-gray-300 hover:bg-gray-800/60 hover:text-white'
+                    : 'text-gray-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+                title={prompt}
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Sessions List */}
