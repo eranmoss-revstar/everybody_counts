@@ -17,7 +17,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
-  const [ragSessionId, setRagSessionId] = useState<string | undefined>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -86,8 +85,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setIsLoading(true);
 
     try {
-      const data = await queryChat(userMessage.content, ragSessionId, getIdToken());
-      if (data.sessionId) setRagSessionId(data.sessionId);
+      const history = session.messages.map(m => ({ role: m.role, content: m.content }));
+      const data = await queryChat(userMessage.content, getIdToken(), history);
       setSuggestedQuestions(data.followUpSuggestions);
 
       const assistantMessage = {

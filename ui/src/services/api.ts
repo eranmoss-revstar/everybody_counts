@@ -1,25 +1,28 @@
-export interface AgentRequest {
-  question: string;
-  sessionId?: string;
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
 }
 
-export interface AgentResponse {
+export interface ChatRequest {
+  userMessage: string;
+  conversationHistory: ChatMessage[];
+}
+
+export interface ChatResponse {
   response: string;
-  citation?: string | null;
   sessionId?: string | null;
 }
 
 const BASE_URL = (process.env.REACT_APP_API_URL || 'http://localhost:3001').replace(/\/$/, '');
 
 export async function queryDocs(
-  question: string,
+  userMessage: string,
   authToken: string,
-  sessionId?: string,
-): Promise<AgentResponse> {
-  const body: AgentRequest = { question };
-  if (sessionId) body.sessionId = sessionId;
+  conversationHistory: ChatMessage[] = [],
+): Promise<ChatResponse> {
+  const body: ChatRequest = { userMessage, conversationHistory };
 
-  const response = await fetch(`${BASE_URL}/agent`, {
+  const response = await fetch(`${BASE_URL}/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -30,7 +33,7 @@ export async function queryDocs(
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.response || data.error || `Request failed (${response.status})`);
+    throw new Error(data.error || `Request failed (${response.status})`);
   }
 
   return response.json();

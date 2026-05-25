@@ -8,6 +8,7 @@ import {
 } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as s3n from "aws-cdk-lib/aws-s3-notifications";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as apigw from "aws-cdk-lib/aws-apigateway";
 import * as cognito from "aws-cdk-lib/aws-cognito";
@@ -110,6 +111,14 @@ export class AgentCoreStack extends Stack {
         authFlows: { userPassword: true, userSrp: true },
       }
     );
+
+    // Frontend client — no secret (amazon-cognito-identity-js SRP auth doesn't support client secrets)
+    const frontendClient = new cognito.UserPoolClient(this, "FrontendUserPoolClient", {
+      userPool,
+      userPoolClientName: "everybody-counts-frontend",
+      generateSecret: false,
+      authFlows: { userSrp: true, userPassword: true },
+    });
 
     // Cognito domain for OAuth token endpoint (required for client_credentials flow)
     userPool.addDomain("AgentCoreDomain", {
@@ -709,6 +718,91 @@ export class AgentCoreStack extends Stack {
       },
     });
 
+    // ─── KB Sync Lambda ────────────────────────────────────────────────────
+    const kbSyncRole = new iam.Role(this, "KBSyncRole", {
+      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"),
+      ],
+    });
+    kbSyncRole.addToPolicy(new iam.PolicyStatement({
+      actions: ["bedrock:StartIngestionJob"],
+      resources: [knowledgeBase.attrKnowledgeBaseArn],
+    }));
+
+    const kbSyncLambda = new lambda.Function(this, "KBSyncLambda", {
+      functionName: "everybody-counts-kb-sync",
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: "index.lambda_handler",
+      code: lambda.Code.fromAsset(join(__dirname, "../../functions/kb-sync")),
+      role: kbSyncRole,
+      timeout: Duration.minutes(1),
+      environment: {
+        KB_ID: knowledgeBase.attrKnowledgeBaseId,
+        DATA_SOURCE_ID: dataSource.attrDataSourceId,
+        REGION: this.region,
+      },
+    });
+
+    agentCoreBucket.addEventNotification(
+      s3.EventType.OBJECT_CREATED,
+      new s3n.LambdaDestination(kbSyncLambda),
+      { prefix: "uploads/" },
+    );
+
+    // ─── Chat Handler Lambda (RAG + Claude) ────────────────────────────────
+    const chatHandlerRole = new iam.Role(this, "ChatHandlerRole", {
+      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"),
+      ],
+    });
+    chatHandlerRole.addToPolicy(new iam.PolicyStatement({
+      actions: ["bedrock:Retrieve"],
+      resources: [knowledgeBase.attrKnowledgeBaseArn],
+    }));
+    chatHandlerRole.addToPolicy(new iam.PolicyStatement({
+      actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+      resources: [
+        "arn:aws:bedrock:*::foundation-model/*",
+        `arn:aws:bedrock:*:${this.account}:inference-profile/*`,
+      ],
+    }));
+    chatHandlerRole.addToPolicy(new iam.PolicyStatement({
+      actions: ["bedrock:ApplyGuardrail"],
+      resources: [guardrail.attrGuardrailArn],
+    }));
+
+    const chatHandlerLambda = new lambda.Function(this, "ChatHandlerLambda", {
+      functionName: "everybody-counts-chat-handler",
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: "index.lambda_handler",
+      code: lambda.Code.fromAsset(join(__dirname, "../../functions/chat-handler")),
+      role: chatHandlerRole,
+      timeout: Duration.seconds(60),
+      memorySize: 512,
+      environment: {
+        KB_ID: knowledgeBase.attrKnowledgeBaseId,
+        MODEL_ID: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        GUARDRAIL_ID: guardrail.attrGuardrailId,
+        GUARDRAIL_VERSION: guardrailVersion.attrVersion,
+        REGION: this.region,
+      },
+    });
+
+    const chatResource = api.root.addResource("chat");
+    chatResource.addMethod(
+      "POST",
+      new apigw.LambdaIntegration(chatHandlerLambda),
+      {
+        authorizer,
+        authorizationType: apigw.AuthorizationType.COGNITO,
+        authorizationScopes: [
+          `${resourceServer.userPoolResourceServerId}/write`,
+        ],
+      }
+    );
+
     new CfnOutput(this, "KnowledgeBaseId", {
       value: knowledgeBase.attrKnowledgeBaseId,
       description: "Bedrock Knowledge Base ID",
@@ -722,6 +816,11 @@ export class AgentCoreStack extends Stack {
     new CfnOutput(this, "OSSCollectionArn", {
       value: collectionArn,
       description: "OpenSearch Serverless Collection ARN (from OSSFoundationStack)",
+    });
+
+    new CfnOutput(this, "FrontendClientId", {
+      value: frontendClient.userPoolClientId,
+      description: "Cognito App Client ID for the React frontend (no secret)",
     });
   }
 }
