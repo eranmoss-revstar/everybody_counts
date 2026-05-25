@@ -204,9 +204,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               </h3>
               <div className="space-y-3">
                 {[
-                  "What activities help Year 1 pupils understand number bonds to 10?",
-                  "Suggest a starter activity for teaching place value in Year 2",
-                  "How can I support pupils who are struggling with addition?",
+                  "What does the Teacher Notes say about teaching tens and ones in Year 2?",
+                  "What activities are suggested for teaching number bonds to 10 in Year 1?",
+                  "What does the Maths Mastery training say about the concrete-pictorial-abstract approach?",
+                  "How do I teach fractions to Year 5 pupils?",
+                  "What are the best KS1 science activities for Year 1?",
                 ].map((suggestion, index) => (
                   <button
                     key={index}
