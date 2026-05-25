@@ -90,14 +90,6 @@ def lambda_handler(event, context):
         response_body = json.loads(invoke_resp["body"].read())
         reply = response_body["content"][0]["text"]
 
-        # TEMPORARY: append raw KB chunks for validation — remove before go-live
-        if chunks:
-            chunk_lines = "\n\n".join(
-                f"**[Source {i+1}: {sources[i] if i < len(sources) else 'unknown'}]**\n{c}"
-                for i, c in enumerate(chunks)
-            )
-            reply += f"\n\n---\n_KB chunks retrieved (temp — for validation):_\n\n{chunk_lines}"
-
         logger.info(f"Response generated for request {request_id}")
 
         return {
