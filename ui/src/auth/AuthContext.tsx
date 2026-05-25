@@ -7,6 +7,7 @@ import React, {
 } from 'react';
 import { AuthMode, AuthUser } from '../types';
 import AuthService, { AuthResult } from '../services/authService';
+import CognitoAuthService from '../services/cognito';
 
 const AUTH_MODE: AuthMode =
   process.env.REACT_APP_AUTH_MODE === 'cognito' ? 'cognito' : 'mock';
@@ -63,14 +64,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const checkAuthState = useCallback(async () => {
     try {
-      const isAuth = await AuthService.isAuthenticated();
-      if (isAuth) {
-        const claims = AuthService.getIdTokenClaims();
-        const storedToken = localStorage.getItem('auth_token');
-        if (claims && storedToken) {
-          setUser(userFromClaims(claims));
-          setIdToken(storedToken);
-        }
+      const session = await CognitoAuthService.getSession();
+      if (session && session.isValid()) {
+        const freshToken = session.getIdToken().getJwtToken();
+        localStorage.setItem('auth_token', freshToken);
+        const claims = JSON.parse(atob(freshToken.split('.')[1]));
+        setUser(userFromClaims(claims));
+        setIdToken(freshToken);
       }
     } catch (error) {
       console.error('Error checking auth state:', error);
@@ -103,7 +103,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       AuthService.signOut();
       setUser(null);
       setIdToken(null);
-      localStorage.removeItem('chat-sessions');
     } finally {
       setIsLoading(false);
     }

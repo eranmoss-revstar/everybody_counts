@@ -13,31 +13,32 @@ const AppContent: React.FC = () => {
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [timeoutToast, setTimeoutToast] = useState<string>('');
-  const { isAuthenticated, isLoading, logout } = useAuth();
+  const { isAuthenticated, isLoading, logout, user } = useAuth();
   const { isDarkMode, toggleTheme } = useTheme();
 
-  // Load sessions from localStorage on component mount
-  useEffect(() => {
-    const savedSessions = localStorage.getItem('chat-sessions');
-    if (savedSessions) {
-      const parsedSessions: Session[] = JSON.parse(savedSessions);
-      setSessions(parsedSessions);
-      if (parsedSessions.length > 0) {
-        setCurrentSession(parsedSessions[0]);
-      }
-    }
-  }, []);
+  const sessionsKey = user ? `chat-sessions-${user.email}` : null;
 
-  // Save sessions to localStorage whenever sessions change — but only while
-  // authenticated. This avoids wiping persisted sessions on cold-load-unauth
-  // (where the clear effect below would otherwise empty state → triggering
-  // a destructive write of []). AuthContext.logout() handles explicit
-  // removal of the key on its own.
+  // Load sessions from localStorage when the user is resolved
   useEffect(() => {
-    if (isAuthenticated) {
-      localStorage.setItem('chat-sessions', JSON.stringify(sessions));
+    if (!sessionsKey) return;
+    try {
+      const saved = localStorage.getItem(sessionsKey);
+      if (saved) {
+        const parsed: Session[] = JSON.parse(saved);
+        setSessions(parsed);
+        if (parsed.length > 0) setCurrentSession(parsed[0]);
+      }
+    } catch {
+      // ignore parse errors
     }
-  }, [sessions, isAuthenticated]);
+  }, [sessionsKey]);
+
+  // Persist sessions per user whenever they change
+  useEffect(() => {
+    if (isAuthenticated && sessionsKey) {
+      localStorage.setItem(sessionsKey, JSON.stringify(sessions));
+    }
+  }, [sessions, isAuthenticated, sessionsKey]);
 
   // React to passive session-timeout events from utils/sessionManager.
   // Replaces the previous blocking window.confirm with an auto-logout
@@ -58,10 +59,9 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('session:timeout', handler);
   }, [logout, isAuthenticated]);
 
-  // Clear in-memory chat state whenever auth resolves to unauthenticated.
-  // Covers every logout path (sidebar button, session timeout, cold load
-  // without a valid token) so a previous user's sessions never leak into
-  // the next login. Guarded on isLoading so it doesn't fire mid-check.
+  // Clear in-memory sessions when the user logs out so the previous
+  // user's chats don't show briefly before the login screen appears.
+  // History is preserved in localStorage keyed by email.
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       setSessions([]);
