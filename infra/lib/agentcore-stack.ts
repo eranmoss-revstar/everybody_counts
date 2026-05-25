@@ -797,9 +797,6 @@ export class AgentCoreStack extends Stack {
       {
         authorizer,
         authorizationType: apigw.AuthorizationType.COGNITO,
-        authorizationScopes: [
-          `${resourceServer.userPoolResourceServerId}/write`,
-        ],
       }
     );
 
