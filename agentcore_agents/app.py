@@ -1,6 +1,6 @@
 """
-AgentCore QuickStart — Full Boilerplate Agent
-All components: Memory (STM+LTM), Code Interpreter, Browser, Guardrails, OTEL.
+Everybody Counts — AgentCore Agent
+KS1 maths teaching assistant backed by a Bedrock Knowledge Base.
 """
 
 import json
@@ -14,25 +14,33 @@ from bedrock_agentcore import BedrockAgentCoreApp
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# ─── Environment (set by CDK) ───────────────────────────────────────────────
+# ─── Environment ─────────────────────────────────────────────────────────────
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 MEMORY_ID = os.environ.get("MEMORY_ID", "")
-CODE_INTERPRETER_ID = os.environ.get("CODE_INTERPRETER_ID", "")
-BROWSER_ID = os.environ.get("BROWSER_ID", "")
 GUARDRAIL_ID = os.environ.get("GUARDRAIL_ID", "")
 GUARDRAIL_VERSION = os.environ.get("GUARDRAIL_VERSION", "")
-GATEWAY_URL = os.environ.get("GATEWAY_URL", "")
-MODEL_ID = os.environ.get("MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
+KB_ID = os.environ.get("KB_ID", "")
+MODEL_ID = os.environ.get("MODEL_ID", "us.anthropic.claude-sonnet-4-5-20250929-v1:0")
 
-# ─── Lazy-initialized globals ────────────────────────────────────────────────
+SYSTEM_PROMPT = """You are a friendly, expert KS1 mathematics teaching assistant.
+You help UK primary school teachers (Key Stage 1, ages 5–7, Year 1 and Year 2) with step-by-step, classroom-ready guidance on teaching maths concepts.
+Your tone is pedagogical, clarifying, and playful — encouraging for both teachers and young learners.
+
+Always use the retrieve_teaching_materials tool to search the knowledge base before answering any question about maths teaching.
+When citing or attributing ideas, say they are drawn from the Everybody Counts knowledge base.
+If the retrieved materials do not cover the question, politely say that this information is not currently available in the knowledge base.
+If the question is not related to KS1 mathematics teaching (Year 1 or Year 2), politely explain that this assistant currently supports Year 1 and Year 2 maths teaching only.
+Do not end your responses with follow-up questions or prompts asking if the teacher wants more information.
+
+After your response, if you retrieved documents, append a final line in exactly this format (no extra text):
+SOURCES: filename1.pdf, filename2.pdf"""
+
+# ─── Lazy-initialised globals ─────────────────────────────────────────────────
 _agent = None
 _initialized = False
 
 
 def _ensure_initialized():
-    """Lazy init: build Agent with all tools on first call.
-    Deferred to stay within AgentCore's 30-second init timeout.
-    """
     global _agent, _initialized
     if _initialized:
         return
@@ -42,103 +50,52 @@ def _ensure_initialized():
     from strands import Agent
     from strands.models.bedrock import BedrockModel
     from strands.tools import tool
-    from strands_tools import tavily
-
-    # Fetch Tavily API key from Secrets Manager (optional — agent works without it)
-    tavily_available = False
-    try:
-        sm = boto3.client("secretsmanager", region_name=AWS_REGION)
-        resp = sm.get_secret_value(SecretId="agentcore/tavily-api-key")
-        secret = resp["SecretString"]
-        try:
-            api_key = json.loads(secret).get("api_key", secret)
-        except json.JSONDecodeError:
-            api_key = secret
-        if api_key and api_key != "your-tavily-api-key-here":
-            os.environ["TAVILY_API_KEY"] = api_key
-            tavily_available = True
-            logger.info("Tavily API key configured — web search enabled")
-        else:
-            logger.info("Tavily secret is placeholder — skipping web search tool")
-    except Exception as e:
-        logger.info(f"Tavily secret not available — skipping web search tool: {e}")
-
-    # ─── Built-in Tools ──────────────────────────────────────────────
-    @tool
-    def calculator(expression: str) -> str:
-        """Evaluate a basic math expression (e.g. '2 + 3 * 4')."""
-        import re
-        import ast
-        import operator
-
-        logger.info(f"TOOL INVOKED: calculator(expression='{expression}')")
-
-        if not re.match(r"^[0-9+\-*/().\s]+$", expression):
-            return "Error: Only numbers and basic operators (+, -, *, /, parentheses) are allowed."
-
-        ops = {
-            ast.Add: operator.add, ast.Sub: operator.sub,
-            ast.Mult: operator.mul, ast.Div: operator.truediv,
-            ast.USub: operator.neg, ast.UAdd: operator.pos,
-        }
-
-        def safe_eval(node):
-            if isinstance(node, ast.Expression):
-                return safe_eval(node.body)
-            if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
-                return node.value
-            if isinstance(node, ast.BinOp) and type(node.op) in ops:
-                return ops[type(node.op)](safe_eval(node.left), safe_eval(node.right))
-            if isinstance(node, ast.UnaryOp) and type(node.op) in ops:
-                return ops[type(node.op)](safe_eval(node.operand))
-            raise ValueError(f"Unsupported: {type(node).__name__}")
-
-        try:
-            tree = ast.parse(expression, mode="eval")
-            result = safe_eval(tree)
-            logger.info(f"TOOL RESULT: calculator -> {result}")
-            return f"Result: {result}"
-        except Exception as exc:
-            logger.error(f"TOOL ERROR: calculator -> {exc}")
-            return f"Error: {exc}"
 
     @tool
-    def get_current_time() -> str:
-        """Get the current date and time in UTC."""
-        logger.info("TOOL INVOKED: get_current_time()")
-        result = f"Current time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
-        logger.info(f"TOOL RESULT: get_current_time -> {result}")
-        return result
+    def retrieve_teaching_materials(query: str) -> str:
+        """Retrieve relevant KS1 maths teaching materials from the Everybody Counts knowledge base."""
+        logger.info(f"TOOL: retrieve_teaching_materials(query='{query[:80]}...')")
 
-    tools = [calculator, get_current_time]
-    if tavily_available:
-        tools.insert(0, tavily.tavily_search)
-        logger.info("Tavily web search tool added")
-    else:
-        logger.info("Agent initialized without web search tool")
+        if not KB_ID:
+            return "Knowledge base not configured."
 
-    # ─── Code Interpreter (Strands wrapper) ──────────────────────────
-    if CODE_INTERPRETER_ID:
         try:
-            from strands_tools.code_interpreter import AgentCoreCodeInterpreter
-            ci_tool = AgentCoreCodeInterpreter(region=AWS_REGION)
-            tools.append(ci_tool.code_interpreter)
-            logger.info(f"Code Interpreter tool loaded: {CODE_INTERPRETER_ID}")
+            client = boto3.client("bedrock-agent-runtime", region_name=AWS_REGION)
+            response = client.retrieve(
+                knowledgeBaseId=KB_ID,
+                retrievalQuery={"text": query},
+                retrievalConfiguration={
+                    "vectorSearchConfiguration": {"numberOfResults": 5}
+                },
+            )
+            results = response.get("retrievalResults", [])
         except Exception as e:
-            logger.warning(f"Code Interpreter not available: {e}")
+            logger.error(f"KB retrieve error: {e}")
+            return "Could not retrieve teaching materials at this time."
 
-    # ─── Browser (Strands wrapper) ───────────────────────────────────
-    if BROWSER_ID:
-        try:
-            from strands_tools.browser import AgentCoreBrowser
-            browser_tool = AgentCoreBrowser(region=AWS_REGION)
-            tools.append(browser_tool.browser)
-            logger.info(f"Browser tool loaded: {BROWSER_ID}")
-        except Exception as e:
-            logger.warning(f"Browser not available: {e}")
+        if not results:
+            return "No relevant teaching materials found in the knowledge base."
 
-    # ─── Model with Guardrails ───────────────────────────────────────
-    model_kwargs = {"model_id": MODEL_ID}
+        sources = []
+        chunks = []
+        seen = set()
+        for r in results:
+            text = r.get("content", {}).get("text", "")
+            uri = r.get("location", {}).get("s3Location", {}).get("uri", "")
+            if uri:
+                name = uri.split("/")[-1]
+                if name and name not in seen:
+                    seen.add(name)
+                    sources.append(name)
+            if text:
+                chunks.append(text)
+
+        context = "\n\n---\n\n".join(chunks)
+        sources_str = ", ".join(sources) if sources else "unknown"
+        logger.info(f"TOOL: retrieved {len(chunks)} chunks from {sources}")
+        return f"[Retrieved from: {sources_str}]\n\n{context}"
+
+    model_kwargs: Dict[str, Any] = {"model_id": MODEL_ID}
     if GUARDRAIL_ID and GUARDRAIL_VERSION:
         model_kwargs["guardrail_id"] = GUARDRAIL_ID
         model_kwargs["guardrail_version"] = GUARDRAIL_VERSION
@@ -146,38 +103,27 @@ def _ensure_initialized():
 
     model = BedrockModel(**model_kwargs)
 
-    # ─── Agent ───────────────────────────────────────────────────────
     _agent = Agent(
         model=model,
-        system_prompt=(
-            "You are an intelligent AI assistant with access to multiple tools.\n\n"
-            "Capabilities:\n"
-            "- Web search: Find current information online\n"
-            "- Calculator: Evaluate math expressions\n"
-            "- Time: Get current date/time\n"
-            "- Code execution: Run Python/JS/TS code in a sandbox (if available)\n"
-            "- Web browsing: Navigate websites and extract information (if available)\n\n"
-            "Use tools when needed. Be helpful, accurate, and professional."
-        ),
-        tools=tools,
+        system_prompt=SYSTEM_PROMPT,
+        tools=[retrieve_teaching_materials],
     )
-    logger.info(f"Agent initialized with {len(tools)} tools")
+    logger.info("Agent initialised")
 
 
-# ─── Entrypoint ──────────────────────────────────────────────────────────────
+# ─── Entrypoint ───────────────────────────────────────────────────────────────
 
 app = BedrockAgentCoreApp()
 
 
 @app.entrypoint
 def invoke(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Main agent entrypoint with Memory (STM+LTM) integration."""
     session_id = None
     try:
         _ensure_initialized()
 
         if not payload or not isinstance(payload, dict):
-            raise ValueError("Invalid payload: must be a non-empty dictionary")
+            raise ValueError("Invalid payload")
 
         user_message = payload.get("prompt", "")
         if not isinstance(user_message, str) or not user_message.strip():
@@ -187,17 +133,12 @@ def invoke(payload: Dict[str, Any]) -> Dict[str, Any]:
         session_id = payload.get("sessionId") or f"session-{uuid4().hex[:12]}"
         actor_id = payload.get("actorId", "default")
 
-        logger.info(f"Invoked — session={session_id}, actor={actor_id}, len={len(user_message)}")
+        logger.info(f"Invoked — session={session_id}, len={len(user_message)}")
 
-        # ─── Memory-integrated invocation ────────────────────────────
         if MEMORY_ID:
             try:
-                from bedrock_agentcore.memory.integrations.strands.config import (
-                    AgentCoreMemoryConfig,
-                )
-                from bedrock_agentcore.memory.integrations.strands.session_manager import (
-                    AgentCoreMemorySessionManager,
-                )
+                from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
+                from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
 
                 config = AgentCoreMemoryConfig(
                     memory_id=MEMORY_ID,
@@ -216,8 +157,16 @@ def invoke(payload: Dict[str, Any]) -> Dict[str, Any]:
 
         response_text = result.message if hasattr(result, "message") and result.message else str(result)
 
+        # Extract sources from SOURCES: line appended by the agent
+        sources = []
+        if "SOURCES:" in response_text:
+            parts = response_text.rsplit("SOURCES:", 1)
+            response_text = parts[0].strip()
+            sources = [s.strip() for s in parts[1].strip().split(",") if s.strip()]
+
         return {
             "result": response_text,
+            "sources": sources,
             "session_id": session_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "status": "success",

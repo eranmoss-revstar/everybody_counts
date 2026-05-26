@@ -97,7 +97,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
     try {
       const history = session.messages.map(m => ({ role: m.role, content: m.content }));
-      const data = await queryChat(userMessage.content, getIdToken(), history);
+      const data = await queryChat(userMessage.content, getIdToken(), history, session.id);
       setSuggestedQuestions(data.followUpSuggestions);
 
       const assistantMessage = {

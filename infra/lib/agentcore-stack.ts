@@ -286,7 +286,7 @@ export class AgentCoreStack extends Stack {
         BROWSER_ID: browser.browserId,
         GUARDRAIL_ID: guardrail.attrGuardrailId,
         GUARDRAIL_VERSION: guardrailVersion.attrVersion,
-        MODEL_ID: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        MODEL_ID: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
         GATEWAY_URL: "TBD",
         AGENT_OBSERVABILITY_ENABLED: "true",
         OTEL_PYTHON_DISTRO: "aws_distro",
@@ -382,6 +382,8 @@ export class AgentCoreStack extends Stack {
       "EnvironmentVariables.GATEWAY_URL",
       gateway.gatewayUrl
     );
+    // KB_ID is set after knowledgeBase is declared (further down this file)
+    // — see the override below the knowledgeBase declaration.
 
     // ─── Lambda Bridge (API GW → Lambda → AgentCore Runtime) ───────────────
     const lambdaRole = new iam.Role(this, "LambdaExecutionRole", {
@@ -718,6 +720,21 @@ export class AgentCoreStack extends Stack {
       },
     });
 
+    // ─── Wire KB into AgentCore Runtime ───────────────────────────────────
+    // Now that knowledgeBase exists, inject its ID into the Runtime env and
+    // grant the Runtime permission to retrieve from it.
+    cfnRuntime.addPropertyOverride(
+      "EnvironmentVariables.KB_ID",
+      knowledgeBase.attrKnowledgeBaseId
+    );
+
+    runtime.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["bedrock:Retrieve"],
+        resources: [knowledgeBase.attrKnowledgeBaseArn],
+      })
+    );
+
     // ─── KB Sync Lambda ────────────────────────────────────────────────────
     const kbSyncRole = new iam.Role(this, "KBSyncRole", {
       assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
@@ -772,6 +789,10 @@ export class AgentCoreStack extends Stack {
       actions: ["bedrock:ApplyGuardrail"],
       resources: [guardrail.attrGuardrailArn],
     }));
+    chatHandlerRole.addToPolicy(new iam.PolicyStatement({
+      actions: ["aws-marketplace:ViewSubscriptions", "aws-marketplace:Subscribe"],
+      resources: ["*"],
+    }));
 
     const chatHandlerLambda = new lambda.Function(this, "ChatHandlerLambda", {
       functionName: "everybody-counts-chat-handler",
@@ -783,7 +804,7 @@ export class AgentCoreStack extends Stack {
       memorySize: 512,
       environment: {
         KB_ID: knowledgeBase.attrKnowledgeBaseId,
-        MODEL_ID: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        MODEL_ID: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
         GUARDRAIL_ID: guardrail.attrGuardrailId,
         GUARDRAIL_VERSION: guardrailVersion.attrVersion,
         REGION: this.region,
@@ -793,7 +814,7 @@ export class AgentCoreStack extends Stack {
     const chatResource = api.root.addResource("chat");
     chatResource.addMethod(
       "POST",
-      new apigw.LambdaIntegration(chatHandlerLambda),
+      new apigw.LambdaIntegration(agentCoreLambda),
       {
         authorizer,
         authorizationType: apigw.AuthorizationType.COGNITO,

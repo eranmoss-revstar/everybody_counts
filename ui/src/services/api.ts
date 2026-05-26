@@ -6,6 +6,7 @@ export interface ChatMessage {
 export interface ChatRequest {
   userMessage: string;
   conversationHistory: ChatMessage[];
+  sessionId?: string;
 }
 
 export interface ChatResponse {
@@ -20,8 +21,9 @@ export async function queryDocs(
   userMessage: string,
   authToken: string,
   conversationHistory: ChatMessage[] = [],
+  sessionId?: string,
 ): Promise<ChatResponse> {
-  const body: ChatRequest = { userMessage, conversationHistory };
+  const body: ChatRequest = { userMessage, conversationHistory, sessionId };
 
   const response = await fetch(`${BASE_URL}/chat`, {
     method: 'POST',

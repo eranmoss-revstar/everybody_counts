@@ -15,10 +15,11 @@ export async function queryChat(
   question: string,
   authToken: string | null,
   conversationHistory: ChatMessage[] = [],
+  sessionId?: string,
 ): Promise<ChatResponse> {
   if (IS_REAL) {
     if (!authToken) throw new Error('Not authenticated');
-    const data = await queryDocs(question, authToken, conversationHistory);
+    const data = await queryDocs(question, authToken, conversationHistory, sessionId);
     return {
       response: data.response || 'No response received.',
       citation: null,
