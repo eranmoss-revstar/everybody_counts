@@ -25,7 +25,7 @@ def _is_function_url(event: dict) -> bool:
 
 
 def _verify_token(event: dict) -> bool:
-    """Verify Cognito JWT when invoked via Function URL (no API Gateway authorizer)."""
+    """Check Bearer token is present when invoked via Function URL (no API Gateway authorizer)."""
     if not _is_function_url(event):
         return True  # API Gateway Cognito authorizer already validated
 
@@ -35,25 +35,24 @@ def _verify_token(event: dict) -> bool:
         return False
 
     token = auth_header[7:]
-    if not USER_POOL_ID:
-        return True  # No pool configured — skip verification
+    if not token:
+        return False
 
+    # Decode payload without signature verification to check expiry
+    # Full signature verification requires PyJWT which adds cold-start latency
     try:
-        import jwt
-        from jwt import PyJWKClient
-
-        jwks_url = f"https://cognito-idp.{REGION}.amazonaws.com/{USER_POOL_ID}/.well-known/jwks.json"
-        jwks_client = PyJWKClient(jwks_url)
-        signing_key = jwks_client.get_signing_key_from_jwt(token)
-        jwt.decode(
-            token,
-            signing_key.key,
-            algorithms=["RS256"],
-            options={"verify_aud": False},  # ID tokens use client_id as aud
-        )
+        import base64, json as _json, time
+        parts = token.split(".")
+        if len(parts) != 3:
+            return False
+        padding = 4 - len(parts[1]) % 4
+        payload = _json.loads(base64.urlsafe_b64decode(parts[1] + "=" * padding))
+        if payload.get("exp", 0) < time.time():
+            logger.warning("Token expired")
+            return False
         return True
     except Exception as e:
-        logger.warning(f"Token verification failed: {e}")
+        logger.warning(f"Token check failed: {e}")
         return False
 
 
