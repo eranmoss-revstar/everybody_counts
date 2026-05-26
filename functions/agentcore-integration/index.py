@@ -117,11 +117,35 @@ def lambda_handler(event, context):
         except json.JSONDecodeError:
             parsed = {"result": raw.decode("utf-8", errors="replace")}
 
-        if parsed.get("status") == "error":
-            return _error(500, parsed.get("error", "Agent error"), request_id)
+        if isinstance(parsed, dict) and parsed.get("status") == "error":
+            return _error(500, parsed.get("error", "Agent error"), request_id, add_cors)
 
-        reply = parsed.get("result", "")
-        sources = parsed.get("sources", [])
+        if isinstance(parsed, dict):
+            result = parsed.get("result")
+            if isinstance(result, dict):
+                # Strands/AgentCore format: {result: {role, content: [{text: "..."}]}}
+                content_blocks = result.get("content", [])
+                if isinstance(content_blocks, list):
+                    reply = "\n".join(
+                        b["text"] for b in content_blocks
+                        if isinstance(b, dict) and "text" in b
+                    )
+                else:
+                    reply = str(content_blocks)
+            elif isinstance(result, str):
+                reply = result
+            else:
+                reply = parsed.get("response") or parsed.get("output") or parsed.get("text") or ""
+            sources = parsed.get("sources", [])
+        elif isinstance(parsed, str):
+            reply = parsed
+            sources = []
+        else:
+            reply = str(parsed)
+            sources = []
+
+        if not isinstance(reply, str):
+            reply = json.dumps(reply)
 
         logger.info(f"Response generated for request {request_id}, sources={sources}")
 
