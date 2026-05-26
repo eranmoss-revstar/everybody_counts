@@ -16,6 +16,10 @@ export interface ChatResponse {
 }
 
 const BASE_URL = (process.env.REACT_APP_API_URL || 'http://localhost:3001').replace(/\/$/, '');
+// Function URL bypasses the API Gateway 29-second hard timeout — used for /chat only
+const CHAT_URL = process.env.REACT_APP_CHAT_FUNCTION_URL
+  ? process.env.REACT_APP_CHAT_FUNCTION_URL.replace(/\/$/, '')
+  : `${BASE_URL}/chat`;
 
 export async function queryDocs(
   userMessage: string,
@@ -25,7 +29,7 @@ export async function queryDocs(
 ): Promise<ChatResponse> {
   const body: ChatRequest = { userMessage, conversationHistory, sessionId };
 
-  const response = await fetch(`${BASE_URL}/chat`, {
+  const response = await fetch(CHAT_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

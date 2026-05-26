@@ -19,8 +19,10 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   };
 
   const formatContent = (content: string): React.ReactNode => {
+    // Ensure content is always a string regardless of what comes in
+    const safeContent = typeof content === 'string' ? content : String(content ?? '');
     // Apply number formatting first
-    const formattedContent = formatMessageContent(content);
+    const formattedContent = formatMessageContent(safeContent);
     
     // Apply markdown-like formatting
     return formattedContent

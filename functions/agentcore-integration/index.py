@@ -2,6 +2,7 @@
 AgentCore Integration Lambda — POST /chat
 Thin bridge: API Gateway → AgentCore Runtime (Everybody Counts agent).
 Accepts { userMessage, conversationHistory, sessionId } from the frontend.
+Supports both API Gateway proxy events and Lambda Function URL events.
 """
 
 import json
@@ -15,17 +16,62 @@ logger.setLevel(logging.INFO)
 
 AGENTCORE_RUNTIME_ARN = os.environ.get("AGENTCORE_RUNTIME_ARN", "")
 REGION = os.environ.get("REGION", "us-east-1")
+USER_POOL_ID = os.environ.get("USER_POOL_ID", "")
+COGNITO_CLIENT_ID = os.environ.get("COGNITO_CLIENT_ID", "")
+
+# Detect Lambda Function URL invocation (requestContext has http key, not resourcePath)
+def _is_function_url(event: dict) -> bool:
+    return "requestContext" in event and "http" in event.get("requestContext", {})
+
+
+def _verify_token(event: dict) -> bool:
+    """Verify Cognito JWT when invoked via Function URL (no API Gateway authorizer)."""
+    if not _is_function_url(event):
+        return True  # API Gateway Cognito authorizer already validated
+
+    headers = event.get("headers") or {}
+    auth_header = headers.get("authorization") or headers.get("Authorization") or ""
+    if not auth_header.startswith("Bearer "):
+        return False
+
+    token = auth_header[7:]
+    if not USER_POOL_ID:
+        return True  # No pool configured — skip verification
+
+    try:
+        import jwt
+        from jwt import PyJWKClient
+
+        jwks_url = f"https://cognito-idp.{REGION}.amazonaws.com/{USER_POOL_ID}/.well-known/jwks.json"
+        jwks_client = PyJWKClient(jwks_url)
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+        jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            options={"verify_aud": False},  # ID tokens use client_id as aud
+        )
+        return True
+    except Exception as e:
+        logger.warning(f"Token verification failed: {e}")
+        return False
 
 
 def lambda_handler(event, context):
     request_id = context.aws_request_id
     logger.info(f"Processing request {request_id}")
 
+    # Auth check for Function URL invocations
+    if not _verify_token(event):
+        return _error(401, "Unauthorized", request_id)
+
     try:
         body = json.loads(event.get("body") or "{}")
         user_message = body.get("userMessage", "").strip()[:2000]
         conversation_history = body.get("conversationHistory", [])
-        session_id = body.get("sessionId") or request_id
+        raw_session = body.get("sessionId") or request_id
+        # runtimeSessionId min length is 33 — pad short IDs with a fixed prefix
+        session_id = raw_session if len(raw_session) >= 33 else f"ec-session-{raw_session}-{'x' * (22 - len(raw_session))}"
 
         if not user_message:
             return _error(400, "userMessage is required", request_id)

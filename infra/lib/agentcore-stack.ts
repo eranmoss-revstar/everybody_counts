@@ -424,10 +424,27 @@ export class AgentCoreStack extends Stack {
         environment: {
           AGENTCORE_RUNTIME_ARN: runtime.agentRuntimeArn,
           REGION: this.region,
+          USER_POOL_ID: userPool.userPoolId,
+          COGNITO_CLIENT_ID: frontendClient.userPoolClientId,
         },
         tracing: lambda.Tracing.ACTIVE,
       }
     );
+
+    // ─── Lambda Function URL (bypasses API Gateway 29s hard limit for AgentCore) ─
+    const chatFunctionUrl = agentCoreLambda.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.NONE,  // Cognito JWT verified inside the Lambda
+      cors: {
+        allowedOrigins: ['*'],
+        allowedMethods: [lambda.HttpMethod.POST],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+      },
+    });
+
+    new CfnOutput(this, "ChatFunctionUrl", {
+      value: chatFunctionUrl.url,
+      description: "Lambda Function URL for POST /chat (no API GW timeout)",
+    });
 
     // ─── API Gateway ───────────────────────────────────────────────────────
     const api = new apigw.RestApi(this, "AgentCoreApi", {
