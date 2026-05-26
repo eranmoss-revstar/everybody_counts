@@ -60,9 +60,13 @@ def lambda_handler(event, context):
     request_id = context.aws_request_id
     logger.info(f"Processing request {request_id}")
 
+    # Function URL CORS config echoes the request origin; Lambda must not also add its own
+    # Access-Control-Allow-Origin or the browser sees duplicate values and blocks the request.
+    add_cors = not _is_function_url(event)
+
     # Auth check for Function URL invocations
     if not _verify_token(event):
-        return _error(401, "Unauthorized", request_id)
+        return _error(401, "Unauthorized", request_id, add_cors)
 
     try:
         body = json.loads(event.get("body") or "{}")
@@ -121,12 +125,13 @@ def lambda_handler(event, context):
 
         logger.info(f"Response generated for request {request_id}, sources={sources}")
 
+        headers = {"Content-Type": "application/json"}
+        if add_cors:
+            headers["Access-Control-Allow-Origin"] = "*"
+
         return {
             "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
-            },
+            "headers": headers,
             "body": json.dumps({
                 "response": reply,
                 "sessionId": session_id,
@@ -137,7 +142,7 @@ def lambda_handler(event, context):
 
     except Exception as e:
         logger.error(f"Error processing request {request_id}: {e}", exc_info=True)
-        return _error(500, "Internal server error", request_id)
+        return _error(500, "Internal server error", request_id, add_cors)
 
 
 def _build_prompt(user_message: str, history: list) -> str:
@@ -156,13 +161,13 @@ def _build_prompt(user_message: str, history: list) -> str:
     return "\n".join(lines)
 
 
-def _error(status_code, message, request_id):
+def _error(status_code, message, request_id, add_cors=True):
+    headers = {"Content-Type": "application/json"}
+    if add_cors:
+        headers["Access-Control-Allow-Origin"] = "*"
     return {
         "statusCode": status_code,
-        "headers": {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-        },
+        "headers": headers,
         "body": json.dumps({
             "error": message,
             "sessionId": request_id,
