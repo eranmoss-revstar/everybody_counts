@@ -27,6 +27,13 @@ aws secretsmanager put-secret-value --secret-id agentcore/tavily-api-key --secre
 ./scripts/deploy-agentcore.sh -p everybody-counts
 ```
 
+## Git Commits
+
+**Commits must show only the human author (eranmoss-revstar).**
+
+- Never add `Co-Authored-By` trailers of any kind
+- Never mention AI tools in commit messages or descriptions
+
 ## CDK is the Single Source of Truth
 
 **All AWS infrastructure must be defined and deployed through CDK. Never use the AWS console or CLI to create, modify, or delete AWS resources.**
