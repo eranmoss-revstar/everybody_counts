@@ -25,9 +25,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     const formattedContent = formatMessageContent(safeContent);
     
     // Apply markdown-like formatting
-    return formattedContent
-      .split('\n')
-      .map((line, lineIndex) => {
+    const lines = formattedContent.split('\n');
+    return lines.map((line, lineIndex) => {
         // Handle code blocks
         if (line.trim().startsWith('```') || line.trim().startsWith('`')) {
           return (
@@ -38,8 +37,34 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             </code>
           );
         }
-        
-        // Handle bold text
+
+        // Handle markdown headings (###, ##, #)
+        const h3Match = line.match(/^###\s+(.*)/);
+        const h2Match = line.match(/^##\s+(.*)/);
+        const h1Match = line.match(/^#\s+(.*)/);
+        if (h3Match) {
+          return <p key={lineIndex} className={`font-semibold mt-3 mb-1 ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>{h3Match[1].replace(/\*\*/g, '')}</p>;
+        }
+        if (h2Match) {
+          return <p key={lineIndex} className={`font-bold text-base mt-4 mb-1 ${isDarkMode ? 'text-gray-50' : 'text-gray-900'}`}>{h2Match[1].replace(/\*\*/g, '')}</p>;
+        }
+        if (h1Match) {
+          return <p key={lineIndex} className={`font-bold text-lg mt-4 mb-2 ${isDarkMode ? 'text-gray-50' : 'text-gray-900'}`}>{h1Match[1].replace(/\*\*/g, '')}</p>;
+        }
+
+        // Handle bullet points
+        const bulletMatch = line.match(/^[-*]\s+(.*)/);
+        if (bulletMatch) {
+          const parts = bulletMatch[1].split(/\*\*(.*?)\*\*/g);
+          return (
+            <div key={lineIndex} className="flex items-start gap-2 my-0.5">
+              <span className={`mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'}`} />
+              <span>{parts.map((p, i) => i % 2 === 1 ? <strong key={i} className="font-semibold">{p}</strong> : p)}</span>
+            </div>
+          );
+        }
+
+        // Handle bold text in regular lines
         const parts = line.split(/\*\*(.*?)\*\*/g);
         const formattedLine = parts.map((part, partIndex) => {
           if (partIndex % 2 === 1) {
@@ -47,11 +72,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           }
           return part;
         });
-        
+
         return (
           <React.Fragment key={lineIndex}>
             {formattedLine}
-            {lineIndex < formattedContent.split('\n').length - 1 && <br />}
+            {lineIndex < lines.length - 1 && <br />}
           </React.Fragment>
         );
       });
