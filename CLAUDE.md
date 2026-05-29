@@ -36,14 +36,26 @@ aws secretsmanager put-secret-value --secret-id agentcore/tavily-api-key --secre
 
 ## CDK is the Single Source of Truth
 
-**All AWS infrastructure must be defined and deployed through CDK. Never use the AWS console or CLI to create, modify, or delete AWS resources.**
+**All AWS infrastructure and code must be deployed through CDK. Never use the AWS console or CLI to create, modify, or delete AWS resources.**
 
 - Every resource (Lambda, S3, Cognito, Bedrock KB, OpenSearch, API Gateway, Guardrails, IAM, etc.) must exist in `infra/lib/`
 - If a new service or resource is needed, add it to the CDK stack first, then deploy
-- If a resource is changed (config, permissions, env vars), update the CDK stack and redeploy — never change it in the console
+- If a resource is changed (config, permissions, env vars, **or Lambda code**), update and run CDK deploy — never patch it directly with `aws lambda update-function-code` or equivalent CLI shortcuts
 - If a resource is removed, remove it from the CDK stack and redeploy — never delete it manually
 - The CDK stack is always kept in sync with what is deployed; if they drift, CDK wins
 - Console access is read-only (for observability/debugging only)
+
+### Deploying changes
+
+```bash
+# Deploy everything (Lambda code + infra + AgentCore container)
+cd infra && npx cdk deploy --profile everybody-counts
+
+# Or use the deploy script (also rebuilds the AgentCore Docker image)
+./scripts/deploy-agentcore.sh -p everybody-counts
+```
+
+Lambda functions (`functions/agentcore-integration/`, `functions/chat-handler/`, `functions/kb-sync/`) are packaged by CDK via `Code.fromAsset()` — editing the source file and running `cdk deploy` is all that is needed. Do not use `aws lambda update-function-code`.
 
 ## Project Overview
 
