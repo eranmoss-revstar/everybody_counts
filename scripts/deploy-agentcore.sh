@@ -157,7 +157,7 @@ print_status "Deploying AgentCore stack..."
 print_warning "This takes 5-10 minutes (Docker build + CloudFormation)..."
 echo ""
 
-npx cdk deploy \
+npx cdk deploy AgentCoreQuickStartStack \
     --require-approval never \
     --profile "$AWS_PROFILE" \
     --outputs-file "$PROJECT_ROOT/cdk-outputs.json"
