@@ -215,11 +215,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               </h3>
               <div className="space-y-3">
                 {[
-                  "What does the Teacher Notes say about teaching tens and ones in Year 2?",
-                  "What activities are suggested for teaching number bonds to 10 in Year 1?",
-                  "What does the Maths Mastery training say about the concrete-pictorial-abstract approach?",
-                  "How do I teach fractions to Year 5 pupils?",
-                  "What are the best KS1 science activities for Year 1?",
+                  "How do I introduce counting within 100 to my Year 1 class using the materials?",
+                  "What manipulatives are recommended for teaching addition and subtraction facts within 10 in Year 1?",
+                  "How should I structure a lesson on place value — tens and ones — for Year 2?",
+                  "What does the knowledge base say about introducing multiplication to Year 2 pupils?",
+                  "How can I use part-whole models to teach number bonds in Year 1?",
+                  "What activities are suggested for teaching 2D and 3D shape recognition in Year 1?",
+                  "How do the Year 2 materials approach teaching fractions for the first time?",
+                  "What progression is described for moving from concrete to abstract in Year 2 addition?",
                 ].map((suggestion, index) => (
                   <button
                     key={index}
