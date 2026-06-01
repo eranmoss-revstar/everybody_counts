@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Plus,
   MessageSquare,
@@ -10,11 +10,25 @@ import {
   Search,
   User,
   Palette,
-  LogOut
+  LogOut,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { SidebarProps } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
+import { getAdminSettings, updateAdminSettings } from '../services/api';
+
+const LENGTH_OPTIONS = [
+  { label: 'Brief', value: 400 },
+  { label: 'Standard', value: 1000 },
+  { label: 'Detailed', value: 2000 },
+];
+
+const TONE_OPTIONS = [
+  { label: 'Precise', value: 0.2 },
+  { label: 'Balanced', value: 0.7 },
+  { label: 'Creative', value: 0.9 },
+];
 
 
 const EXAMPLE_PROMPTS = [
@@ -37,8 +51,33 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [temperature, setTemperature] = useState(0.7);
+  const [maxTokens, setMaxTokens] = useState(1000);
+  const [savingLLM, setSavingLLM] = useState(false);
   const { isDarkMode } = useTheme();
-  const { logout, user } = useAuth();
+  const { logout, user, getIdToken } = useAuth();
+
+  const isAdmin = user?.groups?.includes('admins') ?? false;
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    const token = getIdToken();
+    if (!token) return;
+    getAdminSettings(token)
+      .then(s => { setTemperature(s.temperature); setMaxTokens(s.maxTokens); })
+      .catch(() => {});
+  }, [isAdmin, getIdToken]);
+
+  const saveLLMSettings = async (temp: number, tokens: number) => {
+    const token = getIdToken();
+    if (!token) return;
+    setSavingLLM(true);
+    try {
+      await updateAdminSettings(token, { temperature: temp, maxTokens: tokens });
+    } finally {
+      setSavingLLM(false);
+    }
+  };
 
   const displayName = user?.name || user?.email || 'User';
   const displayEmail = user?.email || '';
@@ -151,6 +190,55 @@ const Sidebar: React.FC<SidebarProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* LLM Behaviour — admin only */}
+              {isAdmin && (
+                <div className={`p-4 rounded-xl border transition-all duration-300 ${
+                  isDarkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'
+                }`}>
+                  <div className="flex items-center space-x-3 mb-3">
+                    <SlidersHorizontal className={`w-5 h-5 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+                    <p className={`font-medium transition-colors duration-300 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+                      LLM Behaviour
+                    </p>
+                    {savingLLM && (
+                      <span className={`text-xs ml-auto ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Saving…</span>
+                    )}
+                  </div>
+                  <p className={`text-xs mb-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Response Length</p>
+                  <div className="flex gap-1 mb-3">
+                    {LENGTH_OPTIONS.map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => { setMaxTokens(opt.value); saveLLMSettings(temperature, opt.value); }}
+                        className={`flex-1 py-1.5 text-xs rounded-lg transition-all duration-200 ${
+                          maxTokens === opt.value
+                            ? 'bg-blue-500 text-white font-medium'
+                            : isDarkMode ? 'bg-gray-600 text-gray-300 hover:bg-gray-500' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className={`text-xs mb-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Tone</p>
+                  <div className="flex gap-1">
+                    {TONE_OPTIONS.map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => { setTemperature(opt.value); saveLLMSettings(opt.value, maxTokens); }}
+                        className={`flex-1 py-1.5 text-xs rounded-lg transition-all duration-200 ${
+                          temperature === opt.value
+                            ? 'bg-blue-500 text-white font-medium'
+                            : isDarkMode ? 'bg-gray-600 text-gray-300 hover:bg-gray-500' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Logout Button */}
               <div>
