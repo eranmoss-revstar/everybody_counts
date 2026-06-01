@@ -49,7 +49,7 @@ const AdminSettings: React.FC = () => {
     if (!token) return;
     setSaving(true);
     try {
-      await updateAdminSettings(token, { temperature: temp, maxTokens: tokens });
+      await updateAdminSettings(token, { temperature: temp, maxTokens: tokens, format: 'structured', outputType: 'explanation' });
     } finally {
       setSaving(false);
     }

@@ -24,6 +24,8 @@ const CHAT_URL = process.env.REACT_APP_CHAT_FUNCTION_URL
 export interface AdminSettings {
   temperature: number;
   maxTokens: number;
+  format: 'structured' | 'prose' | 'step_by_step';
+  outputType: 'explanation' | 'lesson_plan' | 'activity_ideas';
 }
 
 export async function getAdminSettings(authToken: string): Promise<AdminSettings> {

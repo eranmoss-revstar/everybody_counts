@@ -45,10 +45,32 @@ If the question is not related to KS1 mathematics teaching (Year 1 or Year 2), p
 After your response, if you retrieved documents, append a final line in exactly this format (no extra text):
 SOURCES: filename1.pdf, filename2.pdf"""
 
+# ─── Format / output-type prompt additions ────────────────────────────────────
+_FORMAT_INSTRUCTIONS = {
+    "structured": "Structure your response with clear ## headings and bullet points for list-shaped content.",
+    "prose": "Write in flowing prose paragraphs. Avoid bullet points and headings unless absolutely necessary.",
+    "step_by_step": "Present your response as numbered steps. Each step must be a clear, actionable instruction.",
+}
+
+_OUTPUT_TYPE_INSTRUCTIONS = {
+    "explanation": "Answer the teacher's question with a clear explanation grounded in the teaching materials.",
+    "lesson_plan": (
+        "Format your response as a classroom lesson plan with these sections: "
+        "**Learning Objective**, **Resources Needed**, **Warm-Up (5 min)**, "
+        "**Main Activity**, and **Plenary**."
+    ),
+    "activity_ideas": (
+        "Provide a set of practical classroom activity ideas. "
+        "For each activity include: the activity name, what concept it teaches, and how to run it."
+    ),
+}
+
 # ─── Lazy-initialised globals ─────────────────────────────────────────────────
 _agent = None
 _agent_temperature: float = -1.0
 _agent_max_tokens: int = -1
+_agent_format: str = ""
+_agent_output_type: str = ""
 _retrieve_tool = None
 
 
@@ -106,10 +128,16 @@ def _ensure_tool():
     _retrieve_tool = retrieve_teaching_materials
 
 
-def _get_agent(temperature: float, max_tokens: int):
-    global _agent, _agent_temperature, _agent_max_tokens
+def _get_agent(temperature: float, max_tokens: int, fmt: str = "structured", output_type: str = "explanation"):
+    global _agent, _agent_temperature, _agent_max_tokens, _agent_format, _agent_output_type
     _ensure_tool()
-    if _agent is not None and _agent_temperature == temperature and _agent_max_tokens == max_tokens:
+    if (
+        _agent is not None
+        and _agent_temperature == temperature
+        and _agent_max_tokens == max_tokens
+        and _agent_format == fmt
+        and _agent_output_type == output_type
+    ):
         return _agent
 
     from strands import Agent
@@ -125,17 +153,22 @@ def _get_agent(temperature: float, max_tokens: int):
         model_kwargs["guardrail_version"] = GUARDRAIL_VERSION
         logger.info(f"Guardrails enabled: {GUARDRAIL_ID} v{GUARDRAIL_VERSION}")
 
+    format_instruction = _FORMAT_INSTRUCTIONS.get(fmt, _FORMAT_INSTRUCTIONS["structured"])
+    output_instruction = _OUTPUT_TYPE_INSTRUCTIONS.get(output_type, _OUTPUT_TYPE_INSTRUCTIONS["explanation"])
+    system_prompt = f"{SYSTEM_PROMPT}\n\n## Response style\n{format_instruction}\n\n## Output type\n{output_instruction}"
+
     model = BedrockModel(**model_kwargs)
     _agent = Agent(
         model=model,
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         tools=[_retrieve_tool],
     )
     _agent_temperature = temperature
     _agent_max_tokens = max_tokens
-    logger.info(f"Agent initialised: temperature={temperature}, max_tokens={max_tokens}")
+    _agent_format = fmt
+    _agent_output_type = output_type
+    logger.info(f"Agent initialised: temperature={temperature}, max_tokens={max_tokens}, format={fmt}, output_type={output_type}")
     return _agent
-    logger.info("Agent initialised")
 
 
 # ─── Entrypoint ───────────────────────────────────────────────────────────────
@@ -159,10 +192,12 @@ def invoke(payload: Dict[str, Any]) -> Dict[str, Any]:
         actor_id = payload.get("actorId", "default")
         temperature = float(payload.get("temperature", 0.7))
         max_tokens = int(payload.get("max_tokens", 2048))
+        fmt = payload.get("format", "structured")
+        output_type = payload.get("output_type", "explanation")
 
-        logger.info(f"Invoked — session={session_id}, temperature={temperature}, max_tokens={max_tokens}")
+        logger.info(f"Invoked — session={session_id}, temperature={temperature}, max_tokens={max_tokens}, format={fmt}, output_type={output_type}")
 
-        agent = _get_agent(temperature, max_tokens)
+        agent = _get_agent(temperature, max_tokens, fmt, output_type)
 
         if MEMORY_ID:
             try:

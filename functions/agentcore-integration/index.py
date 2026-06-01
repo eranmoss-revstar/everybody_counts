@@ -21,6 +21,8 @@ USER_POOL_ID = os.environ.get("USER_POOL_ID", "")
 COGNITO_CLIENT_ID = os.environ.get("COGNITO_CLIENT_ID", "")
 SSM_TEMPERATURE_PARAM = os.environ.get("SSM_TEMPERATURE_PARAM", "/everybody-counts/llm/temperature")
 SSM_MAX_TOKENS_PARAM = os.environ.get("SSM_MAX_TOKENS_PARAM", "/everybody-counts/llm/max_tokens")
+SSM_FORMAT_PARAM = os.environ.get("SSM_FORMAT_PARAM", "/everybody-counts/llm/format")
+SSM_OUTPUT_TYPE_PARAM = os.environ.get("SSM_OUTPUT_TYPE_PARAM", "/everybody-counts/llm/output_type")
 
 _settings_cache: dict = {}
 _settings_cache_time: float = 0.0
@@ -32,15 +34,20 @@ def _get_llm_settings() -> dict:
         return _settings_cache
     try:
         ssm = boto3.client("ssm", region_name=REGION)
-        result = ssm.get_parameters(Names=[SSM_TEMPERATURE_PARAM, SSM_MAX_TOKENS_PARAM])
+        result = ssm.get_parameters(Names=[
+            SSM_TEMPERATURE_PARAM, SSM_MAX_TOKENS_PARAM,
+            SSM_FORMAT_PARAM, SSM_OUTPUT_TYPE_PARAM,
+        ])
         params = {p["Name"]: p["Value"] for p in result["Parameters"]}
         _settings_cache = {
             "temperature": float(params.get(SSM_TEMPERATURE_PARAM, "0.7")),
-            "max_tokens": int(params.get(SSM_MAX_TOKENS_PARAM, "1000")),
+            "max_tokens": int(params.get(SSM_MAX_TOKENS_PARAM, "2048")),
+            "format": params.get(SSM_FORMAT_PARAM, "structured"),
+            "output_type": params.get(SSM_OUTPUT_TYPE_PARAM, "explanation"),
         }
     except Exception as e:
         logger.warning(f"SSM settings fetch failed, using defaults: {e}")
-        _settings_cache = {"temperature": 0.7, "max_tokens": 1000}
+        _settings_cache = {"temperature": 0.7, "max_tokens": 2048, "format": "structured", "output_type": "explanation"}
     _settings_cache_time = time.time()
     return _settings_cache
 
@@ -116,6 +123,8 @@ def lambda_handler(event, context):
             "sessionId": session_id,
             "temperature": settings["temperature"],
             "max_tokens": settings["max_tokens"],
+            "format": settings["format"],
+            "output_type": settings["output_type"],
         }).encode("utf-8")
 
         logger.info(f"Invoking AgentCore Runtime: {AGENTCORE_RUNTIME_ARN}, session={session_id}")

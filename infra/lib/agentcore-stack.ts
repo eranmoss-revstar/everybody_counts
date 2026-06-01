@@ -148,6 +148,18 @@ export class AgentCoreStack extends Stack {
       description: "LLM max tokens: 1024=brief, 2048=standard, 4096=detailed",
     });
 
+    const formatParam = new ssm.StringParameter(this, "LlmFormat", {
+      parameterName: "/everybody-counts/llm/format",
+      stringValue: "structured",
+      description: "Response format: structured, prose, step_by_step",
+    });
+
+    const outputTypeParam = new ssm.StringParameter(this, "LlmOutputType", {
+      parameterName: "/everybody-counts/llm/output_type",
+      stringValue: "explanation",
+      description: "Output type: explanation, lesson_plan, activity_ideas",
+    });
+
     // ─── Secrets Manager ───────────────────────────────────────────────────
     const tavilySecret = new secretsmanager.Secret(
       this,
@@ -449,6 +461,8 @@ export class AgentCoreStack extends Stack {
           COGNITO_CLIENT_ID: frontendClient.userPoolClientId,
           SSM_TEMPERATURE_PARAM: temperatureParam.parameterName,
           SSM_MAX_TOKENS_PARAM: maxTokensParam.parameterName,
+          SSM_FORMAT_PARAM: formatParam.parameterName,
+          SSM_OUTPUT_TYPE_PARAM: outputTypeParam.parameterName,
         },
         tracing: lambda.Tracing.ACTIVE,
       }
@@ -456,6 +470,8 @@ export class AgentCoreStack extends Stack {
 
     temperatureParam.grantRead(agentCoreLambda);
     maxTokensParam.grantRead(agentCoreLambda);
+    formatParam.grantRead(agentCoreLambda);
+    outputTypeParam.grantRead(agentCoreLambda);
 
     // ─── Lambda Function URL (bypasses API Gateway 29s hard limit for AgentCore) ─
     const chatFunctionUrl = agentCoreLambda.addFunctionUrl({
@@ -866,12 +882,18 @@ export class AgentCoreStack extends Stack {
         REGION: this.region,
         SSM_TEMPERATURE_PARAM: temperatureParam.parameterName,
         SSM_MAX_TOKENS_PARAM: maxTokensParam.parameterName,
+        SSM_FORMAT_PARAM: formatParam.parameterName,
+        SSM_OUTPUT_TYPE_PARAM: outputTypeParam.parameterName,
       },
     });
     temperatureParam.grantRead(adminSettingsLambda);
     temperatureParam.grantWrite(adminSettingsLambda);
     maxTokensParam.grantRead(adminSettingsLambda);
     maxTokensParam.grantWrite(adminSettingsLambda);
+    formatParam.grantRead(adminSettingsLambda);
+    formatParam.grantWrite(adminSettingsLambda);
+    outputTypeParam.grantRead(adminSettingsLambda);
+    outputTypeParam.grantWrite(adminSettingsLambda);
 
     const adminResource = api.root.addResource("admin");
     const adminSettingsResource = adminResource.addResource("settings");

@@ -52,7 +52,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [temperature, setTemperature] = useState(0.7);
-  const [maxTokens, setMaxTokens] = useState(1000);
+  const [maxTokens, setMaxTokens] = useState(2048);
+  const [format, setFormat] = useState<'structured' | 'prose' | 'step_by_step'>('structured');
+  const [outputType, setOutputType] = useState<'explanation' | 'lesson_plan' | 'activity_ideas'>('explanation');
   const [savingLLM, setSavingLLM] = useState(false);
   const { isDarkMode } = useTheme();
   const { logout, user, getIdToken } = useAuth();
@@ -64,16 +66,26 @@ const Sidebar: React.FC<SidebarProps> = ({
     const token = getIdToken();
     if (!token) return;
     getAdminSettings(token)
-      .then(s => { setTemperature(s.temperature); setMaxTokens(s.maxTokens); })
+      .then(s => {
+        setTemperature(s.temperature);
+        setMaxTokens(s.maxTokens);
+        setFormat(s.format);
+        setOutputType(s.outputType);
+      })
       .catch(() => {});
   }, [isAdmin, getIdToken]);
 
-  const saveLLMSettings = async (temp: number, tokens: number) => {
+  const saveLLMSettings = async (
+    temp: number,
+    tokens: number,
+    fmt: 'structured' | 'prose' | 'step_by_step',
+    outType: 'explanation' | 'lesson_plan' | 'activity_ideas',
+  ) => {
     const token = getIdToken();
     if (!token) return;
     setSavingLLM(true);
     try {
-      await updateAdminSettings(token, { temperature: temp, maxTokens: tokens });
+      await updateAdminSettings(token, { temperature: temp, maxTokens: tokens, format: fmt, outputType: outType });
     } finally {
       setSavingLLM(false);
     }
@@ -210,7 +222,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     {LENGTH_OPTIONS.map(opt => (
                       <button
                         key={opt.value}
-                        onClick={() => { setMaxTokens(opt.value); saveLLMSettings(temperature, opt.value); }}
+                        onClick={() => { setMaxTokens(opt.value); saveLLMSettings(temperature, opt.value, format, outputType); }}
                         className={`flex-1 py-1.5 text-xs rounded-lg transition-all duration-200 ${
                           maxTokens === opt.value
                             ? 'bg-blue-500 text-white font-medium'
@@ -222,13 +234,53 @@ const Sidebar: React.FC<SidebarProps> = ({
                     ))}
                   </div>
                   <p className={`text-xs mb-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Tone</p>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 mb-3">
                     {TONE_OPTIONS.map(opt => (
                       <button
                         key={opt.value}
-                        onClick={() => { setTemperature(opt.value); saveLLMSettings(opt.value, maxTokens); }}
+                        onClick={() => { setTemperature(opt.value); saveLLMSettings(opt.value, maxTokens, format, outputType); }}
                         className={`flex-1 py-1.5 text-xs rounded-lg transition-all duration-200 ${
                           temperature === opt.value
+                            ? 'bg-blue-500 text-white font-medium'
+                            : isDarkMode ? 'bg-gray-600 text-gray-300 hover:bg-gray-500' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className={`text-xs mb-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Format</p>
+                  <div className="flex gap-1 mb-3">
+                    {([
+                      { label: 'Structured', value: 'structured' },
+                      { label: 'Prose', value: 'prose' },
+                      { label: 'Step-by-step', value: 'step_by_step' },
+                    ] as const).map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => { setFormat(opt.value); saveLLMSettings(temperature, maxTokens, opt.value, outputType); }}
+                        className={`flex-1 py-1.5 text-xs rounded-lg transition-all duration-200 ${
+                          format === opt.value
+                            ? 'bg-blue-500 text-white font-medium'
+                            : isDarkMode ? 'bg-gray-600 text-gray-300 hover:bg-gray-500' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className={`text-xs mb-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Output Type</p>
+                  <div className="flex gap-1">
+                    {([
+                      { label: 'Explanation', value: 'explanation' },
+                      { label: 'Lesson Plan', value: 'lesson_plan' },
+                      { label: 'Activities', value: 'activity_ideas' },
+                    ] as const).map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => { setOutputType(opt.value); saveLLMSettings(temperature, maxTokens, format, opt.value); }}
+                        className={`flex-1 py-1.5 text-xs rounded-lg transition-all duration-200 ${
+                          outputType === opt.value
                             ? 'bg-blue-500 text-white font-medium'
                             : isDarkMode ? 'bg-gray-600 text-gray-300 hover:bg-gray-500' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
                         }`}
