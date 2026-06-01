@@ -343,12 +343,15 @@ const Sidebar: React.FC<SidebarProps> = ({
         <div className={`flex items-center justify-between p-4 border-b transition-all duration-300 ${
           isDarkMode ? 'border-slate-700/50' : 'border-slate-200/50'
         }`}>
-          <div className="flex items-center">
+          <div className="flex items-center gap-2 min-w-0">
             <img
               src={ecLogo}
-              alt="Everybody Counts"
-              className="h-10 w-auto object-contain"
+              alt=""
+              className="h-8 w-auto object-contain flex-shrink-0"
             />
+            <span className={`text-base font-semibold truncate ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+              Everybody Counts
+            </span>
           </div>
           <button
             onClick={onToggle}
