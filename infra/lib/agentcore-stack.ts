@@ -148,13 +148,17 @@ export class AgentCoreStack extends Stack {
       description: "LLM max tokens: 1024=brief, 2048=standard, 4096=detailed",
     });
 
-    const formatParam = ssm.StringParameter.fromStringParameterName(
-      this, "LlmFormat", "/everybody-counts/llm/format"
-    );
+    const formatParam = new ssm.StringParameter(this, "LlmFormat", {
+      parameterName: "/everybody-counts/llm/format",
+      stringValue: "structured",
+      description: "Response format: structured, prose, step_by_step",
+    });
 
-    const outputTypeParam = ssm.StringParameter.fromStringParameterName(
-      this, "LlmOutputType", "/everybody-counts/llm/output_type"
-    );
+    const outputTypeParam = new ssm.StringParameter(this, "LlmOutputType", {
+      parameterName: "/everybody-counts/llm/output_type",
+      stringValue: "explanation",
+      description: "Output type: explanation, lesson_plan, activity_ideas",
+    });
 
     // ─── Secrets Manager ───────────────────────────────────────────────────
     const tavilySecret = new secretsmanager.Secret(
