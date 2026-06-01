@@ -43,8 +43,10 @@ function userFromClaims(
   emailFallback = '',
 ): AuthUser {
   const email = claims.email || emailFallback;
-  const groupsRaw = claims['cognito:groups'] || 'viewer';
-  const groups = groupsRaw.split(',').filter(Boolean);
+  const groupsRaw = claims['cognito:groups'];
+  const groups = Array.isArray(groupsRaw)
+    ? groupsRaw.filter(Boolean)
+    : (groupsRaw ? String(groupsRaw).split(',') : ['viewer']).filter(Boolean);
   return {
     email,
     userId: claims.sub || '',
