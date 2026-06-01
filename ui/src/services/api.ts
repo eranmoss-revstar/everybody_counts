@@ -21,6 +21,29 @@ const CHAT_URL = process.env.REACT_APP_CHAT_FUNCTION_URL
   ? process.env.REACT_APP_CHAT_FUNCTION_URL.replace(/\/$/, '')
   : `${BASE_URL}/chat`;
 
+export interface AdminSettings {
+  temperature: number;
+  maxTokens: number;
+}
+
+export async function getAdminSettings(authToken: string): Promise<AdminSettings> {
+  const response = await fetch(`${BASE_URL}/admin/settings`, {
+    headers: { Authorization: `Bearer ${authToken}` },
+  });
+  if (!response.ok) throw new Error(`Failed to get settings (${response.status})`);
+  return response.json();
+}
+
+export async function updateAdminSettings(authToken: string, settings: AdminSettings): Promise<AdminSettings> {
+  const response = await fetch(`${BASE_URL}/admin/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+    body: JSON.stringify(settings),
+  });
+  if (!response.ok) throw new Error(`Failed to save settings (${response.status})`);
+  return response.json();
+}
+
 export async function queryDocs(
   userMessage: string,
   authToken: string,

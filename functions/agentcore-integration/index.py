@@ -9,6 +9,7 @@ import json
 import boto3
 import os
 import logging
+import time
 from datetime import datetime
 
 logger = logging.getLogger()
@@ -18,6 +19,30 @@ AGENTCORE_RUNTIME_ARN = os.environ.get("AGENTCORE_RUNTIME_ARN", "")
 REGION = os.environ.get("REGION", "us-east-1")
 USER_POOL_ID = os.environ.get("USER_POOL_ID", "")
 COGNITO_CLIENT_ID = os.environ.get("COGNITO_CLIENT_ID", "")
+SSM_TEMPERATURE_PARAM = os.environ.get("SSM_TEMPERATURE_PARAM", "/everybody-counts/llm/temperature")
+SSM_MAX_TOKENS_PARAM = os.environ.get("SSM_MAX_TOKENS_PARAM", "/everybody-counts/llm/max_tokens")
+
+_settings_cache: dict = {}
+_settings_cache_time: float = 0.0
+_SETTINGS_TTL = 300  # 5 minutes
+
+def _get_llm_settings() -> dict:
+    global _settings_cache, _settings_cache_time
+    if _settings_cache and (time.time() - _settings_cache_time) < _SETTINGS_TTL:
+        return _settings_cache
+    try:
+        ssm = boto3.client("ssm", region_name=REGION)
+        result = ssm.get_parameters(Names=[SSM_TEMPERATURE_PARAM, SSM_MAX_TOKENS_PARAM])
+        params = {p["Name"]: p["Value"] for p in result["Parameters"]}
+        _settings_cache = {
+            "temperature": float(params.get(SSM_TEMPERATURE_PARAM, "0.7")),
+            "max_tokens": int(params.get(SSM_MAX_TOKENS_PARAM, "1000")),
+        }
+    except Exception as e:
+        logger.warning(f"SSM settings fetch failed, using defaults: {e}")
+        _settings_cache = {"temperature": 0.7, "max_tokens": 1000}
+    _settings_cache_time = time.time()
+    return _settings_cache
 
 # Detect Lambda Function URL invocation (requestContext has http key, not resourcePath)
 def _is_function_url(event: dict) -> bool:
@@ -85,9 +110,12 @@ def lambda_handler(event, context):
         # Prepend recent conversation history to the prompt so the agent has context
         prompt = _build_prompt(user_message, conversation_history)
 
+        settings = _get_llm_settings()
         payload = json.dumps({
             "prompt": prompt,
             "sessionId": session_id,
+            "temperature": settings["temperature"],
+            "max_tokens": settings["max_tokens"],
         }).encode("utf-8")
 
         logger.info(f"Invoking AgentCore Runtime: {AGENTCORE_RUNTIME_ARN}, session={session_id}")

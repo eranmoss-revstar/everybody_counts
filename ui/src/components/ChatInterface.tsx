@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Menu, StopCircle, ChevronDown } from 'lucide-react';
 import MessageBubble from './MessageBubble';
+import AdminSettings from './AdminSettings';
 import { ChatInterfaceProps } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
@@ -177,6 +178,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           ? 'bg-slate-800/80 backdrop-blur-sm border-slate-700/50 shadow-sm'
           : 'bg-white/80 backdrop-blur-sm border-slate-200/50 shadow-sm'
       }`}>
+        <div className="flex items-center justify-between w-full">
         <div className="flex items-center">
           <button
             onClick={onToggleSidebar}
@@ -200,6 +202,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               {session.messages.length} messages
             </p>
           </div>
+        </div>
+          <AdminSettings />
         </div>
       </div>
 

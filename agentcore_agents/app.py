@@ -47,18 +47,16 @@ SOURCES: filename1.pdf, filename2.pdf"""
 
 # ─── Lazy-initialised globals ─────────────────────────────────────────────────
 _agent = None
-_initialized = False
+_agent_temperature: float = -1.0
+_agent_max_tokens: int = -1
+_retrieve_tool = None
 
 
-def _ensure_initialized():
-    global _agent, _initialized
-    if _initialized:
+def _ensure_tool():
+    global _retrieve_tool
+    if _retrieve_tool is not None:
         return
-    _initialized = True
-
     import boto3
-    from strands import Agent
-    from strands.models.bedrock import BedrockModel
     from strands.tools import tool
 
     @tool
@@ -105,19 +103,38 @@ def _ensure_initialized():
         logger.info(f"TOOL: retrieved {len(chunks)} chunks from {sources}")
         return f"[Retrieved from: {sources_str}]\n\n{context}"
 
-    model_kwargs: Dict[str, Any] = {"model_id": MODEL_ID}
+    _retrieve_tool = retrieve_teaching_materials
+
+
+def _get_agent(temperature: float, max_tokens: int):
+    global _agent, _agent_temperature, _agent_max_tokens
+    _ensure_tool()
+    if _agent is not None and _agent_temperature == temperature and _agent_max_tokens == max_tokens:
+        return _agent
+
+    from strands import Agent
+    from strands.models.bedrock import BedrockModel
+
+    model_kwargs: Dict[str, Any] = {
+        "model_id": MODEL_ID,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
     if GUARDRAIL_ID and GUARDRAIL_VERSION:
         model_kwargs["guardrail_id"] = GUARDRAIL_ID
         model_kwargs["guardrail_version"] = GUARDRAIL_VERSION
         logger.info(f"Guardrails enabled: {GUARDRAIL_ID} v{GUARDRAIL_VERSION}")
 
     model = BedrockModel(**model_kwargs)
-
     _agent = Agent(
         model=model,
         system_prompt=SYSTEM_PROMPT,
-        tools=[retrieve_teaching_materials],
+        tools=[_retrieve_tool],
     )
+    _agent_temperature = temperature
+    _agent_max_tokens = max_tokens
+    logger.info(f"Agent initialised: temperature={temperature}, max_tokens={max_tokens}")
+    return _agent
     logger.info("Agent initialised")
 
 
@@ -130,8 +147,6 @@ app = BedrockAgentCoreApp()
 def invoke(payload: Dict[str, Any]) -> Dict[str, Any]:
     session_id = None
     try:
-        _ensure_initialized()
-
         if not payload or not isinstance(payload, dict):
             raise ValueError("Invalid payload")
 
@@ -142,8 +157,12 @@ def invoke(payload: Dict[str, Any]) -> Dict[str, Any]:
         user_message = user_message.strip()[:2000]
         session_id = payload.get("sessionId") or f"session-{uuid4().hex[:12]}"
         actor_id = payload.get("actorId", "default")
+        temperature = float(payload.get("temperature", 0.7))
+        max_tokens = int(payload.get("max_tokens", 1000))
 
-        logger.info(f"Invoked — session={session_id}, len={len(user_message)}")
+        logger.info(f"Invoked — session={session_id}, temperature={temperature}, max_tokens={max_tokens}")
+
+        agent = _get_agent(temperature, max_tokens)
 
         if MEMORY_ID:
             try:
@@ -156,14 +175,14 @@ def invoke(payload: Dict[str, Any]) -> Dict[str, Any]:
                     actor_id=actor_id,
                 )
                 with AgentCoreMemorySessionManager(config, region_name=AWS_REGION) as session_manager:
-                    _agent.session_manager = session_manager
-                    result = _agent(user_message)
-                    _agent.session_manager = None
+                    agent.session_manager = session_manager
+                    result = agent(user_message)
+                    agent.session_manager = None
             except Exception as e:
                 logger.warning(f"Memory session failed, invoking without memory: {e}")
-                result = _agent(user_message)
+                result = agent(user_message)
         else:
-            result = _agent(user_message)
+            result = agent(user_message)
 
         response_text = result.message if hasattr(result, "message") and result.message else str(result)
 

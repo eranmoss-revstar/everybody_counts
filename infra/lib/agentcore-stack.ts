@@ -19,6 +19,7 @@ import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as cw_actions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as cloudtrail from "aws-cdk-lib/aws-cloudtrail";
+import * as ssm from "aws-cdk-lib/aws-ssm";
 import * as bedrock from "aws-cdk-lib/aws-bedrock";
 import * as agentcore from "@aws-cdk/aws-bedrock-agentcore-alpha";
 import { Fn } from "aws-cdk-lib";
@@ -125,6 +126,26 @@ export class AgentCoreStack extends Stack {
       cognitoDomain: {
         domainPrefix: `agentcore-qs-${this.account}`,
       },
+    });
+
+    // Cognito admins group — members can configure LLM behaviour via /admin/settings
+    new cognito.CfnUserPoolGroup(this, "AdminsGroup", {
+      userPoolId: userPool.userPoolId,
+      groupName: "admins",
+      description: "Administrators who can configure LLM behaviour",
+    });
+
+    // ─── SSM Parameters (admin-configurable LLM settings) ─────────────────
+    const temperatureParam = new ssm.StringParameter(this, "LlmTemperature", {
+      parameterName: "/everybody-counts/llm/temperature",
+      stringValue: "0.7",
+      description: "LLM temperature: 0.2=precise, 0.7=balanced, 0.9=creative",
+    });
+
+    const maxTokensParam = new ssm.StringParameter(this, "LlmMaxTokens", {
+      parameterName: "/everybody-counts/llm/max_tokens",
+      stringValue: "1000",
+      description: "LLM max tokens: 400=brief, 1000=standard, 2000=detailed",
     });
 
     // ─── Secrets Manager ───────────────────────────────────────────────────
@@ -426,10 +447,15 @@ export class AgentCoreStack extends Stack {
           REGION: this.region,
           USER_POOL_ID: userPool.userPoolId,
           COGNITO_CLIENT_ID: frontendClient.userPoolClientId,
+          SSM_TEMPERATURE_PARAM: temperatureParam.parameterName,
+          SSM_MAX_TOKENS_PARAM: maxTokensParam.parameterName,
         },
         tracing: lambda.Tracing.ACTIVE,
       }
     );
+
+    temperatureParam.grantRead(agentCoreLambda);
+    maxTokensParam.grantRead(agentCoreLambda);
 
     // ─── Lambda Function URL (bypasses API Gateway 29s hard limit for AgentCore) ─
     const chatFunctionUrl = agentCoreLambda.addFunctionUrl({
@@ -826,6 +852,36 @@ export class AgentCoreStack extends Stack {
         GUARDRAIL_VERSION: guardrailVersion.attrVersion,
         REGION: this.region,
       },
+    });
+
+    // ─── Admin Settings Lambda ─────────────────────────────────────────────
+    const adminSettingsLambda = new lambda.Function(this, "AdminSettingsLambda", {
+      functionName: "everybody-counts-admin-settings",
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: "index.lambda_handler",
+      code: lambda.Code.fromAsset(join(__dirname, "../../functions/admin-settings")),
+      timeout: Duration.seconds(10),
+      memorySize: 128,
+      environment: {
+        REGION: this.region,
+        SSM_TEMPERATURE_PARAM: temperatureParam.parameterName,
+        SSM_MAX_TOKENS_PARAM: maxTokensParam.parameterName,
+      },
+    });
+    temperatureParam.grantRead(adminSettingsLambda);
+    temperatureParam.grantWrite(adminSettingsLambda);
+    maxTokensParam.grantRead(adminSettingsLambda);
+    maxTokensParam.grantWrite(adminSettingsLambda);
+
+    const adminResource = api.root.addResource("admin");
+    const adminSettingsResource = adminResource.addResource("settings");
+    adminSettingsResource.addMethod("GET", new apigw.LambdaIntegration(adminSettingsLambda), {
+      authorizer,
+      authorizationType: apigw.AuthorizationType.COGNITO,
+    });
+    adminSettingsResource.addMethod("PUT", new apigw.LambdaIntegration(adminSettingsLambda), {
+      authorizer,
+      authorizationType: apigw.AuthorizationType.COGNITO,
     });
 
     const chatResource = api.root.addResource("chat");
