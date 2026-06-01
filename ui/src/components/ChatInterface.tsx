@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ecLogo from '../assets/ec-logo.png';
 import { Send, Menu, StopCircle, ChevronDown } from 'lucide-react';
 import MessageBubble from './MessageBubble';
 import { ChatInterfaceProps } from '../types';
@@ -149,11 +150,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           : 'bg-gradient-to-br from-slate-50 via-white to-slate-50'
       }`}>
         <div className="text-center max-w-md mx-auto px-6 animate-fade-in">
-          <h2 className={`text-2xl font-bold mb-3 transition-colors duration-500 ${
-            isDarkMode ? 'text-slate-100' : 'text-slate-800'
-          }`}>
-            Everybody Counts
-          </h2>
+          <img
+            src={ecLogo}
+            alt="Everybody Counts"
+            className="h-16 w-auto object-contain mx-auto mb-4"
+          />
           <p className={`leading-relaxed transition-colors duration-500 ${
             isDarkMode ? 'text-slate-300' : 'text-slate-600'
           }`}>

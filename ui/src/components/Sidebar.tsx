@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ecLogo from '../assets/ec-logo.png';
 import {
   Plus,
   MessageSquare,
@@ -342,10 +343,12 @@ const Sidebar: React.FC<SidebarProps> = ({
         <div className={`flex items-center justify-between p-4 border-b transition-all duration-300 ${
           isDarkMode ? 'border-slate-700/50' : 'border-slate-200/50'
         }`}>
-          <div className="flex items-center space-x-2">
-            <h1 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
-              Everybody Counts
-            </h1>
+          <div className="flex items-center">
+            <img
+              src={ecLogo}
+              alt="Everybody Counts"
+              className="h-10 w-auto object-contain"
+            />
           </div>
           <button
             onClick={onToggle}
