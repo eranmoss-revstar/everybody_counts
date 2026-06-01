@@ -5,9 +5,9 @@ import { useTheme } from '../contexts/ThemeContext';
 import { getAdminSettings, updateAdminSettings } from '../services/api';
 
 const LENGTH_OPTIONS = [
-  { label: 'Brief', value: 400 },
-  { label: 'Standard', value: 1000 },
-  { label: 'Detailed', value: 2000 },
+  { label: 'Brief', value: 1024 },
+  { label: 'Standard', value: 2048 },
+  { label: 'Detailed', value: 4096 },
 ];
 
 const TONE_OPTIONS = [

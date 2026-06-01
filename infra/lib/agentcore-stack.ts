@@ -144,8 +144,8 @@ export class AgentCoreStack extends Stack {
 
     const maxTokensParam = new ssm.StringParameter(this, "LlmMaxTokens", {
       parameterName: "/everybody-counts/llm/max_tokens",
-      stringValue: "1000",
-      description: "LLM max tokens: 400=brief, 1000=standard, 2000=detailed",
+      stringValue: "2048",
+      description: "LLM max tokens: 1024=brief, 2048=standard, 4096=detailed",
     });
 
     // ─── Secrets Manager ───────────────────────────────────────────────────

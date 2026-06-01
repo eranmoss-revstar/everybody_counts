@@ -158,7 +158,7 @@ def invoke(payload: Dict[str, Any]) -> Dict[str, Any]:
         session_id = payload.get("sessionId") or f"session-{uuid4().hex[:12]}"
         actor_id = payload.get("actorId", "default")
         temperature = float(payload.get("temperature", 0.7))
-        max_tokens = int(payload.get("max_tokens", 1000))
+        max_tokens = int(payload.get("max_tokens", 2048))
 
         logger.info(f"Invoked — session={session_id}, temperature={temperature}, max_tokens={max_tokens}")
 
@@ -205,6 +205,13 @@ def invoke(payload: Dict[str, Any]) -> Dict[str, Any]:
         logger.error(f"Validation error: {ve}")
         return {"error": str(ve), "session_id": session_id or "unknown", "status": "error"}
     except Exception as e:
+        if "MaxTokensReachedException" in type(e).__name__ or "max_tokens" in str(e).lower():
+            logger.error(f"Max tokens exceeded: {e}")
+            return {
+                "error": "The response was too long to complete. Please try asking a shorter or more specific question.",
+                "session_id": session_id or "unknown",
+                "status": "error",
+            }
         logger.error(f"Unexpected error: {e}", exc_info=True)
         return {"error": "An unexpected error occurred.", "session_id": session_id or "unknown", "status": "error"}
 
