@@ -138,7 +138,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
   return (
     <div className="flex justify-start mb-5 group">
-      <div className={`relative w-full rounded-2xl border px-6 py-5 font-mono text-[13px] leading-relaxed ${
+      <div className={`relative w-full rounded-2xl border px-6 py-5 ${
         isError
           ? isDarkMode
             ? 'bg-red-900/30 border-red-700/50 text-red-200'
@@ -146,7 +146,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           : isDarkMode
             ? 'bg-slate-800 border-slate-600/70 text-slate-100'
             : 'bg-white border-slate-300 text-slate-900'
-      }`}>
+      }`} style={{ fontFamily: "'Nunito', sans-serif", fontSize: '15px', lineHeight: '1.75' }}>
 
         {/* Copy button */}
         {!isError && (
@@ -173,7 +173,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           {blocks.map((block, idx) => {
             if (block.kind === 'title') {
               return (
-                <p key={idx} className="text-center font-bold underline underline-offset-4 decoration-1 pb-1">
+                <p key={idx} className="font-bold underline underline-offset-4 decoration-1 pb-1"
+                   style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', cursive", fontSize: '17px' }}>
                   {block.text}
                 </p>
               );
