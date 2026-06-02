@@ -66,12 +66,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   }, [inputMessage]);
 
   useEffect(() => {
-    if (isLoading) {
-      const timer = setTimeout(() => setIsTyping(true), 500);
-      return () => clearTimeout(timer);
-    } else {
-      setIsTyping(false);
-    }
+    if (!isLoading) { setIsTyping(false); setProgressMessage(''); return; }
+    const t0 = setTimeout(() => setIsTyping(true), 400);
+    const t1 = setTimeout(() => setProgressMessage('Searching teaching materials...'), 400);
+    const t2 = setTimeout(() => setProgressMessage('Analysing relevant content...'), 9000);
+    const t3 = setTimeout(() => setProgressMessage('Generating response...'), 18000);
+    return () => [t0, t1, t2, t3].forEach(clearTimeout);
   }, [isLoading]);
 
   const handleSendMessage = async (overrideMessage?: string): Promise<void> => {

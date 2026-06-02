@@ -97,7 +97,7 @@ function BoldText({ parts }: { parts: BoldPart[] }) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-const WORDS_PER_SEC = 60;
+const WORDS_PER_SEC = 25;
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isUser = message.role === 'user';
