@@ -16,10 +16,11 @@ export async function queryChat(
   authToken: string | null,
   conversationHistory: ChatMessage[] = [],
   sessionId?: string,
+  onProgress?: (message: string) => void,
 ): Promise<ChatResponse> {
   if (IS_REAL) {
     if (!authToken) throw new Error('Not authenticated');
-    const data = await queryDocs(question, authToken, conversationHistory, sessionId);
+    const data = await queryDocs(question, authToken, conversationHistory, sessionId, onProgress);
     return {
       response: data.response || 'No response received.',
       citation: null,

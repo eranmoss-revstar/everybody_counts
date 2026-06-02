@@ -476,6 +476,7 @@ export class AgentCoreStack extends Stack {
     // ─── Lambda Function URL (bypasses API Gateway 29s hard limit for AgentCore) ─
     const chatFunctionUrl = agentCoreLambda.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,  // Cognito JWT verified inside the Lambda
+      invokeMode: lambda.InvokeMode.RESPONSE_STREAM,
       cors: {
         allowedOrigins: ['*'],
         allowedMethods: [lambda.HttpMethod.POST],

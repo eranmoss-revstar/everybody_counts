@@ -51,6 +51,7 @@ export async function queryDocs(
   authToken: string,
   conversationHistory: ChatMessage[] = [],
   sessionId?: string,
+  onProgress?: (message: string) => void,
 ): Promise<ChatResponse> {
   const body: ChatRequest = { userMessage, conversationHistory, sessionId };
 
@@ -68,5 +69,45 @@ export async function queryDocs(
     throw new Error(data.error || `Request failed (${response.status})`);
   }
 
+  const contentType = response.headers.get('content-type') || '';
+
+  // ── SSE streaming response ────────────────────────────────────────────────
+  if (response.body && (contentType.includes('text/event-stream') || contentType.includes('application/octet-stream'))) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        if (!raw) continue;
+        try {
+          const event = JSON.parse(raw);
+          if (event.error) throw new Error(event.error);
+          if (event.progress && onProgress) onProgress(event.progress);
+          if (event.done) {
+            return {
+              response: event.response || '',
+              sessionId: event.sessionId ?? null,
+              sources: event.sources || [],
+            };
+          }
+        } catch (e: any) {
+          if (e.message && !e.message.includes('JSON')) throw e;
+        }
+      }
+    }
+    throw new Error('Stream ended without a final response');
+  }
+
+  // ── Buffered fallback (non-streaming Lambda) ──────────────────────────────
   return response.json();
 }

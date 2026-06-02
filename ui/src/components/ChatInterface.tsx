@@ -18,6 +18,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [inputMessage, setInputMessage] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isTyping, setIsTyping] = useState<boolean>(false);
+  const [progressMessage, setProgressMessage] = useState<string>('');
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [showScrollButton, setShowScrollButton] = useState<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -94,11 +95,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
     setInputMessage('');
     setSuggestedQuestions([]);
+    setProgressMessage('');
     setIsLoading(true);
 
     try {
       const history = session.messages.map(m => ({ role: m.role, content: m.content }));
-      const data = await queryChat(userMessage.content, getIdToken(), history, session.id);
+      const data = await queryChat(
+        userMessage.content,
+        getIdToken(),
+        history,
+        session.id,
+        (msg) => setProgressMessage(msg),
+      );
       setSuggestedQuestions(data.followUpSuggestions);
 
       const assistantMessage = {
@@ -132,6 +140,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       });
     } finally {
       setIsLoading(false);
+      setProgressMessage('');
     }
   };
 
@@ -274,7 +283,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 <span className={`text-sm transition-colors duration-500 ${
                   isDarkMode ? 'text-slate-300' : 'text-slate-600'
                 }`}>
-                  Thinking...
+                  {progressMessage || 'Thinking...'}
                 </span>
               </div>
             </div>

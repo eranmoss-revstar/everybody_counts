@@ -1,8 +1,7 @@
 """
 AgentCore Integration Lambda — POST /chat
-Thin bridge: API Gateway → AgentCore Runtime (Everybody Counts agent).
-Accepts { userMessage, conversationHistory, sessionId } from the frontend.
-Supports both API Gateway proxy events and Lambda Function URL events.
+Thin bridge: API Gateway / Lambda Function URL → AgentCore Runtime.
+Streams SSE events: progress updates, then the final response.
 """
 
 import json
@@ -26,7 +25,8 @@ SSM_OUTPUT_TYPE_PARAM = os.environ.get("SSM_OUTPUT_TYPE_PARAM", "/everybody-coun
 
 _settings_cache: dict = {}
 _settings_cache_time: float = 0.0
-_SETTINGS_TTL = 300  # 5 minutes
+_SETTINGS_TTL = 300
+
 
 def _get_llm_settings() -> dict:
     global _settings_cache, _settings_cache_time
@@ -51,35 +51,29 @@ def _get_llm_settings() -> dict:
     _settings_cache_time = time.time()
     return _settings_cache
 
-# Detect Lambda Function URL invocation (requestContext has http key, not resourcePath)
+
 def _is_function_url(event: dict) -> bool:
     return "requestContext" in event and "http" in event.get("requestContext", {})
 
 
 def _verify_token(event: dict) -> bool:
-    """Check Bearer token is present when invoked via Function URL (no API Gateway authorizer)."""
     if not _is_function_url(event):
-        return True  # API Gateway Cognito authorizer already validated
-
+        return True
     headers = event.get("headers") or {}
     auth_header = headers.get("authorization") or headers.get("Authorization") or ""
     if not auth_header.startswith("Bearer "):
         return False
-
     token = auth_header[7:]
     if not token:
         return False
-
-    # Decode payload without signature verification to check expiry
-    # Full signature verification requires PyJWT which adds cold-start latency
     try:
-        import base64, json as _json, time
+        import base64, json as _json, time as _time
         parts = token.split(".")
         if len(parts) != 3:
             return False
         padding = 4 - len(parts[1]) % 4
         payload = _json.loads(base64.urlsafe_b64decode(parts[1] + "=" * padding))
-        if payload.get("exp", 0) < time.time():
+        if payload.get("exp", 0) < _time.time():
             logger.warning("Token expired")
             return False
         return True
@@ -88,130 +82,10 @@ def _verify_token(event: dict) -> bool:
         return False
 
 
-def lambda_handler(event, context):
-    request_id = context.aws_request_id
-    logger.info(f"Processing request {request_id}")
-
-    # Function URL CORS config echoes the request origin; Lambda must not also add its own
-    # Access-Control-Allow-Origin or the browser sees duplicate values and blocks the request.
-    add_cors = not _is_function_url(event)
-
-    # Auth check for Function URL invocations
-    if not _verify_token(event):
-        return _error(401, "Unauthorized", request_id, add_cors)
-
-    try:
-        body = json.loads(event.get("body") or "{}")
-        user_message = body.get("userMessage", "").strip()[:2000]
-        conversation_history = body.get("conversationHistory", [])
-        raw_session = body.get("sessionId") or request_id
-        # runtimeSessionId min length is 33 — pad short IDs with a fixed prefix
-        session_id = raw_session if len(raw_session) >= 33 else f"ec-session-{raw_session}-{'x' * (22 - len(raw_session))}"
-
-        if not user_message:
-            return _error(400, "userMessage is required", request_id)
-
-        if not AGENTCORE_RUNTIME_ARN or not AGENTCORE_RUNTIME_ARN.startswith("arn:aws:bedrock-agentcore:"):
-            return _error(500, "AgentCore Runtime not configured", request_id)
-
-        # Prepend recent conversation history to the prompt so the agent has context
-        prompt = _build_prompt(user_message, conversation_history)
-
-        settings = _get_llm_settings()
-        payload = json.dumps({
-            "prompt": prompt,
-            "sessionId": session_id,
-            "temperature": settings["temperature"],
-            "max_tokens": settings["max_tokens"],
-            "format": settings["format"],
-            "output_type": settings["output_type"],
-        }).encode("utf-8")
-
-        logger.info(f"Invoking AgentCore Runtime: {AGENTCORE_RUNTIME_ARN}, session={session_id}")
-
-        client = boto3.client("bedrock-agentcore", region_name=REGION)
-        response = client.invoke_agent_runtime(
-            agentRuntimeArn=AGENTCORE_RUNTIME_ARN,
-            runtimeSessionId=session_id,
-            payload=payload,
-            qualifier="DEFAULT",
-        )
-
-        # Collect streaming response chunks
-        raw = b""
-        if "response" in response and response["response"]:
-            for chunk in response["response"]:
-                if isinstance(chunk, bytes):
-                    raw += chunk
-                else:
-                    raw += str(chunk).encode("utf-8")
-
-        if not raw:
-            return _error(500, "Empty response from AgentCore Runtime", request_id)
-
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            parsed = {"result": raw.decode("utf-8", errors="replace")}
-
-        if isinstance(parsed, dict) and parsed.get("status") == "error":
-            return _error(500, parsed.get("error", "Agent error"), request_id, add_cors)
-
-        if isinstance(parsed, dict):
-            result = parsed.get("result")
-            if isinstance(result, dict):
-                # Strands/AgentCore format: {result: {role, content: [{text: "..."}]}}
-                content_blocks = result.get("content", [])
-                if isinstance(content_blocks, list):
-                    reply = "\n".join(
-                        b["text"] for b in content_blocks
-                        if isinstance(b, dict) and "text" in b
-                    )
-                else:
-                    reply = str(content_blocks)
-            elif isinstance(result, str):
-                reply = result
-            else:
-                reply = parsed.get("response") or parsed.get("output") or parsed.get("text") or ""
-            sources = parsed.get("sources", [])
-        elif isinstance(parsed, str):
-            reply = parsed
-            sources = []
-        else:
-            reply = str(parsed)
-            sources = []
-
-        if not isinstance(reply, str):
-            reply = json.dumps(reply)
-
-        logger.info(f"Response generated for request {request_id}, sources={sources}")
-
-        headers = {"Content-Type": "application/json"}
-        if add_cors:
-            headers["Access-Control-Allow-Origin"] = "*"
-
-        return {
-            "statusCode": 200,
-            "headers": headers,
-            "body": json.dumps({
-                "response": reply,
-                "sessionId": session_id,
-                "timestamp": datetime.utcnow().isoformat(),
-                "sources": sources,
-            }),
-        }
-
-    except Exception as e:
-        logger.error(f"Error processing request {request_id}: {e}", exc_info=True)
-        return _error(500, "Internal server error", request_id, add_cors)
-
-
 def _build_prompt(user_message: str, history: list) -> str:
-    """Prepend the last 7 exchanges of conversation history to the user message."""
-    recent = history[-14:]  # last 14 turns = 7 exchanges
+    recent = history[-14:]
     if not recent:
         return user_message
-
     lines = ["[Conversation History]"]
     for turn in recent:
         role = turn.get("role", "user").capitalize()
@@ -220,6 +94,217 @@ def _build_prompt(user_message: str, history: list) -> str:
     lines.append("")
     lines.append(f"[Current Message]\n{user_message}")
     return "\n".join(lines)
+
+
+def _parse_agentcore_response(raw: bytes):
+    """Parse raw AgentCore response bytes → (reply_text, sources)."""
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        parsed = {"result": raw.decode("utf-8", errors="replace")}
+
+    if isinstance(parsed, dict) and parsed.get("status") == "error":
+        raise RuntimeError(parsed.get("error", "Agent error"))
+
+    reply = ""
+    sources = []
+    if isinstance(parsed, dict):
+        result = parsed.get("result")
+        if isinstance(result, dict):
+            content_blocks = result.get("content", [])
+            if isinstance(content_blocks, list):
+                reply = "\n".join(
+                    b["text"] for b in content_blocks
+                    if isinstance(b, dict) and "text" in b
+                )
+            else:
+                reply = str(content_blocks)
+        elif isinstance(result, str):
+            reply = result
+        else:
+            reply = parsed.get("response") or parsed.get("output") or parsed.get("text") or ""
+        sources = parsed.get("sources", [])
+    elif isinstance(parsed, str):
+        reply = parsed
+
+    if not isinstance(reply, str):
+        reply = json.dumps(reply)
+
+    return reply, sources
+
+
+# ─── Streaming handler ─────────────────────────────────────────────────────────
+
+try:
+    from awslambdaric import streaming_response as _streaming_response_decorator
+
+    @_streaming_response_decorator
+    def lambda_handler(event, response_stream, context):
+        request_id = context.aws_request_id
+        logger.info(f"Streaming request {request_id}")
+
+        def sse(data: dict):
+            response_stream.write(f"data: {json.dumps(data)}\n\n".encode("utf-8"))
+
+        if not _verify_token(event):
+            sse({"error": "Unauthorized", "status": 401})
+            return
+
+        add_cors = not _is_function_url(event)
+
+        try:
+            body = json.loads(event.get("body") or "{}")
+            user_message = body.get("userMessage", "").strip()[:2000]
+            conversation_history = body.get("conversationHistory", [])
+            raw_session = body.get("sessionId") or request_id
+            session_id = raw_session if len(raw_session) >= 33 else f"ec-session-{raw_session}-{'x' * (22 - len(raw_session))}"
+
+            if not user_message:
+                sse({"error": "userMessage is required", "status": 400})
+                return
+
+            if not AGENTCORE_RUNTIME_ARN or not AGENTCORE_RUNTIME_ARN.startswith("arn:aws:bedrock-agentcore:"):
+                sse({"error": "AgentCore Runtime not configured", "status": 500})
+                return
+
+            # ── Progress event 1 — sent immediately ───────────────────────────
+            sse({"progress": "Searching teaching materials..."})
+
+            prompt = _build_prompt(user_message, conversation_history)
+            settings = _get_llm_settings()
+            payload = json.dumps({
+                "prompt": prompt,
+                "sessionId": session_id,
+                "temperature": settings["temperature"],
+                "max_tokens": settings["max_tokens"],
+                "format": settings["format"],
+                "output_type": settings["output_type"],
+            }).encode("utf-8")
+
+            logger.info(f"Invoking AgentCore: {AGENTCORE_RUNTIME_ARN}, session={session_id}")
+
+            client = boto3.client("bedrock-agentcore", region_name=REGION)
+            response = client.invoke_agent_runtime(
+                agentRuntimeArn=AGENTCORE_RUNTIME_ARN,
+                runtimeSessionId=session_id,
+                payload=payload,
+                qualifier="DEFAULT",
+            )
+
+            # ── Progress event 2 — AgentCore has responded, generating text ──
+            sse({"progress": "Generating response..."})
+
+            raw = b""
+            if "response" in response and response["response"]:
+                for chunk in response["response"]:
+                    if isinstance(chunk, bytes):
+                        raw += chunk
+                    else:
+                        raw += str(chunk).encode("utf-8")
+
+            if not raw:
+                sse({"error": "Empty response from AgentCore", "status": 500})
+                return
+
+            reply, sources = _parse_agentcore_response(raw)
+
+            logger.info(f"Response ready for {request_id}, sources={sources}")
+
+            # ── Final event with full response ────────────────────────────────
+            sse({
+                "done": True,
+                "response": reply,
+                "sources": sources,
+                "sessionId": session_id,
+                "timestamp": datetime.utcnow().isoformat(),
+            })
+
+        except RuntimeError as re:
+            logger.error(f"Agent error: {re}")
+            sse({"error": str(re), "status": 500})
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}", exc_info=True)
+            sse({"error": "An unexpected error occurred.", "status": 500})
+
+except ImportError:
+    # ─── Fallback: non-streaming handler (used if awslambdaric not available) ─
+    logger.warning("awslambdaric streaming not available — using buffered handler")
+
+    def lambda_handler(event, context):
+        request_id = context.aws_request_id
+        logger.info(f"Processing request {request_id}")
+        add_cors = not _is_function_url(event)
+
+        if not _verify_token(event):
+            return _error(401, "Unauthorized", request_id, add_cors)
+
+        try:
+            body = json.loads(event.get("body") or "{}")
+            user_message = body.get("userMessage", "").strip()[:2000]
+            conversation_history = body.get("conversationHistory", [])
+            raw_session = body.get("sessionId") or request_id
+            session_id = raw_session if len(raw_session) >= 33 else f"ec-session-{raw_session}-{'x' * (22 - len(raw_session))}"
+
+            if not user_message:
+                return _error(400, "userMessage is required", request_id, add_cors)
+
+            if not AGENTCORE_RUNTIME_ARN or not AGENTCORE_RUNTIME_ARN.startswith("arn:aws:bedrock-agentcore:"):
+                return _error(500, "AgentCore Runtime not configured", request_id, add_cors)
+
+            prompt = _build_prompt(user_message, conversation_history)
+            settings = _get_llm_settings()
+            payload = json.dumps({
+                "prompt": prompt,
+                "sessionId": session_id,
+                "temperature": settings["temperature"],
+                "max_tokens": settings["max_tokens"],
+                "format": settings["format"],
+                "output_type": settings["output_type"],
+            }).encode("utf-8")
+
+            logger.info(f"Invoking AgentCore: {AGENTCORE_RUNTIME_ARN}, session={session_id}")
+
+            client = boto3.client("bedrock-agentcore", region_name=REGION)
+            response = client.invoke_agent_runtime(
+                agentRuntimeArn=AGENTCORE_RUNTIME_ARN,
+                runtimeSessionId=session_id,
+                payload=payload,
+                qualifier="DEFAULT",
+            )
+
+            raw = b""
+            if "response" in response and response["response"]:
+                for chunk in response["response"]:
+                    if isinstance(chunk, bytes):
+                        raw += chunk
+                    else:
+                        raw += str(chunk).encode("utf-8")
+
+            if not raw:
+                return _error(500, "Empty response from AgentCore Runtime", request_id, add_cors)
+
+            reply, sources = _parse_agentcore_response(raw)
+
+            logger.info(f"Response ready for {request_id}, sources={sources}")
+
+            headers = {"Content-Type": "application/json"}
+            if add_cors:
+                headers["Access-Control-Allow-Origin"] = "*"
+
+            return {
+                "statusCode": 200,
+                "headers": headers,
+                "body": json.dumps({
+                    "response": reply,
+                    "sessionId": session_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "sources": sources,
+                }),
+            }
+
+        except Exception as e:
+            logger.error(f"Error: {e}", exc_info=True)
+            return _error(500, "Internal server error", request_id, add_cors)
 
 
 def _error(status_code, message, request_id, add_cors=True):
