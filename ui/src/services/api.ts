@@ -71,19 +71,22 @@ export async function queryDocs(
 
   const contentType = response.headers.get('content-type') || '';
 
-  // ── SSE streaming response ────────────────────────────────────────────────
+  // ── SSE / RESPONSE_STREAM response ───────────────────────────────────────
   if (response.body && (contentType.includes('text/event-stream') || contentType.includes('application/octet-stream'))) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    let buffer = '';
+    let sseBuffer = '';  // SSE line accumulator
+    let rawAll = '';     // full raw body accumulator (fallback)
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+      const chunk = decoder.decode(value, { stream: true });
+      rawAll += chunk;
+      sseBuffer += chunk;
 
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
+      const lines = sseBuffer.split('\n');
+      sseBuffer = lines.pop() ?? '';
 
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue;
@@ -104,6 +107,21 @@ export async function queryDocs(
           if (e.message && !e.message.includes('JSON')) throw e;
         }
       }
+    }
+
+    // No SSE done event — try the full raw body as plain JSON (buffered fallback)
+    try {
+      const data = JSON.parse(rawAll.trim());
+      if (data.error) throw new Error(data.error);
+      if (data.response !== undefined) return data as ChatResponse;
+      // Wrapped API GW proxy format
+      if (data.body) {
+        const inner = typeof data.body === 'string' ? JSON.parse(data.body) : data.body;
+        if (inner.error) throw new Error(inner.error);
+        return inner as ChatResponse;
+      }
+    } catch (e: any) {
+      if (e.message && !e.message.includes('JSON')) throw e;
     }
     throw new Error('Stream ended without a final response');
   }
