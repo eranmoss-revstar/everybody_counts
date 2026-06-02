@@ -38,12 +38,15 @@ function parseContent(raw: string): Block[] {
 
     if (!trimmed) { i++; continue; }
 
-    // # / ## title
-    const titleMatch = trimmed.match(/^#{1,2}\s+(.*)/);
+    // # / ## / ### title — strip all leading # characters
+    const titleMatch = trimmed.match(/^#{1,6}\s+(.*)/);
     if (titleMatch) {
       blocks.push({ kind: 'title', text: titleMatch[1].replace(/\*\*/g, '') });
       i++; continue;
     }
+
+    // Line that is just hashes with no space (malformed heading) — skip
+    if (/^#{1,6}$/.test(trimmed)) { i++; continue; }
 
     // **Bold label:** section — collect following bullets
     const sectionMatch = trimmed.match(/^\*\*(.+:)\*\*\s*$/);
@@ -161,7 +164,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           : isDarkMode
             ? 'bg-slate-800 border-slate-600/70 text-slate-100'
             : 'bg-white border-slate-300 text-slate-900'
-      }`} style={{ fontFamily: "'Nunito', sans-serif", fontSize: '15px', lineHeight: '1.75' }}>
+      }`} style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', cursive", fontSize: '15px', lineHeight: '1.75' }}>
 
         {/* Copy button */}
         {!isError && (
