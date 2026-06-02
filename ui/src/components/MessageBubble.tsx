@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Copy, Check, AlertCircle } from 'lucide-react';
 import { MessageBubbleProps } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
@@ -94,15 +94,34 @@ function BoldText({ parts }: { parts: BoldPart[] }) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+const WORDS_PER_SEC = 60;
+
 const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isUser = message.role === 'user';
   const isError = message.isError;
   const [copied, setCopied] = useState(false);
+  const [displayed, setDisplayed] = useState('');
   const { isDarkMode } = useTheme();
+
+  const safeRaw = typeof message.content === 'string' ? message.content : String(message.content ?? '');
+
+  useEffect(() => {
+    if (isUser || isError) { setDisplayed(safeRaw); return; }
+    setDisplayed('');
+    const words = safeRaw.split(' ');
+    let i = 0;
+    const ms = 1000 / WORDS_PER_SEC;
+    const timer = setInterval(() => {
+      i++;
+      setDisplayed(words.slice(0, i).join(' '));
+      if (i >= words.length) clearInterval(timer);
+    }, ms);
+    return () => clearInterval(timer);
+  }, [safeRaw, isUser, isError]);
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(message.content);
+      await navigator.clipboard.writeText(safeRaw);
     } catch {
       const ta = document.createElement('textarea');
       ta.value = message.content;
@@ -116,10 +135,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const safeContent = typeof message.content === 'string'
-    ? message.content
-    : String(message.content ?? '');
-
   // ── User bubble ────────────────────────────────────────────────────────────
   if (isUser) {
     return (
@@ -127,14 +142,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         <div className={`max-w-sm px-4 py-2.5 rounded-2xl text-sm leading-relaxed text-white ${
           isDarkMode ? 'bg-indigo-900/80 border border-indigo-700/50' : 'bg-indigo-600'
         }`}>
-          {safeContent}
+          {displayed}
         </div>
       </div>
     );
   }
 
   // ── Assistant card ─────────────────────────────────────────────────────────
-  const blocks = parseContent(formatMessageContent(safeContent));
+  const blocks = parseContent(formatMessageContent(displayed));
 
   return (
     <div className="flex justify-start mb-5 group">
