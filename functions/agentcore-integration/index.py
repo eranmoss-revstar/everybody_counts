@@ -287,6 +287,16 @@ except ImportError:
 
             logger.info(f"Response ready for {request_id}, sources={sources}")
 
+            # Function URL in RESPONSE_STREAM mode sends the return value as-is
+            # (no API GW proxy unwrapping), so return raw data for Function URL calls.
+            if _is_function_url(event):
+                return {
+                    "response": reply,
+                    "sessionId": session_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "sources": sources,
+                }
+
             headers = {"Content-Type": "application/json"}
             if add_cors:
                 headers["Access-Control-Allow-Origin"] = "*"
@@ -304,6 +314,8 @@ except ImportError:
 
         except Exception as e:
             logger.error(f"Error: {e}", exc_info=True)
+            if _is_function_url(event):
+                return {"error": "Internal server error", "sessionId": request_id}
             return _error(500, "Internal server error", request_id, add_cors)
 
 

@@ -109,5 +109,15 @@ export async function queryDocs(
   }
 
   // ── Buffered fallback (non-streaming Lambda) ──────────────────────────────
-  return response.json();
+  const data = await response.json();
+
+  // Unwrap API Gateway proxy format if the Function URL forwarded it as-is
+  if (data && typeof data.body === 'string' && data.statusCode) {
+    const inner = JSON.parse(data.body);
+    if (inner.error) throw new Error(inner.error);
+    return inner as ChatResponse;
+  }
+
+  if (data?.error) throw new Error(data.error);
+  return data as ChatResponse;
 }
