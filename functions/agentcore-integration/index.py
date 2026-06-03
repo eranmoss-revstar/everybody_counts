@@ -97,7 +97,7 @@ def _build_prompt(user_message: str, history: list) -> str:
 
 
 def _parse_agentcore_response(raw: bytes):
-    """Parse raw AgentCore response bytes → (reply_text, sources)."""
+    """Parse raw AgentCore response bytes → (reply_text, sources, source_uris)."""
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
@@ -108,6 +108,7 @@ def _parse_agentcore_response(raw: bytes):
 
     reply = ""
     sources = []
+    source_uris = []
     if isinstance(parsed, dict):
         result = parsed.get("result")
         if isinstance(result, dict):
@@ -124,13 +125,44 @@ def _parse_agentcore_response(raw: bytes):
         else:
             reply = parsed.get("response") or parsed.get("output") or parsed.get("text") or ""
         sources = parsed.get("sources", [])
+        source_uris = parsed.get("source_uris", [])
     elif isinstance(parsed, str):
         reply = parsed
 
     if not isinstance(reply, str):
         reply = json.dumps(reply)
 
-    return reply, sources
+    return reply, sources, source_uris
+
+
+def _build_source_links(source_uris: list) -> list:
+    """Generate presigned S3 URLs for source documents so teachers can open the originals."""
+    if not source_uris:
+        return []
+    links = []
+    try:
+        s3 = boto3.client("s3", region_name=REGION)
+    except Exception as e:
+        logger.warning(f"S3 client init failed: {e}")
+        return []
+    for item in source_uris:
+        uri = (item or {}).get("uri", "")
+        name = (item or {}).get("name", "")
+        if not uri.startswith("s3://"):
+            continue
+        bucket, _, key = uri[5:].partition("/")
+        if not bucket or not key:
+            continue
+        try:
+            url = s3.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": bucket, "Key": key},
+                ExpiresIn=3600,
+            )
+            links.append({"name": name or key.split("/")[-1], "url": url})
+        except Exception as e:
+            logger.warning(f"Presign failed for {key}: {e}")
+    return links
 
 
 # ─── Streaming handler ─────────────────────────────────────────────────────────
@@ -206,15 +238,17 @@ try:
                 sse({"error": "Empty response from AgentCore", "status": 500})
                 return
 
-            reply, sources = _parse_agentcore_response(raw)
+            reply, sources, source_uris = _parse_agentcore_response(raw)
+            source_links = _build_source_links(source_uris)
 
-            logger.info(f"Response ready for {request_id}, sources={sources}")
+            logger.info(f"Response ready for {request_id}, sources={sources}, links={len(source_links)}")
 
             # ── Final event with full response ────────────────────────────────
             sse({
                 "done": True,
                 "response": reply,
                 "sources": sources,
+                "sourceLinks": source_links,
                 "sessionId": session_id,
                 "timestamp": datetime.utcnow().isoformat(),
             })
@@ -283,9 +317,10 @@ except ImportError:
             if not raw:
                 return _error(500, "Empty response from AgentCore Runtime", request_id, add_cors)
 
-            reply, sources = _parse_agentcore_response(raw)
+            reply, sources, source_uris = _parse_agentcore_response(raw)
+            source_links = _build_source_links(source_uris)
 
-            logger.info(f"Response ready for {request_id}, sources={sources}")
+            logger.info(f"Response ready for {request_id}, sources={sources}, links={len(source_links)}")
 
             # Function URL in RESPONSE_STREAM mode sends the return value as-is
             # (no API GW proxy unwrapping), so return raw data for Function URL calls.
@@ -295,6 +330,7 @@ except ImportError:
                     "sessionId": session_id,
                     "timestamp": datetime.utcnow().isoformat(),
                     "sources": sources,
+                    "sourceLinks": source_links,
                 }
 
             headers = {"Content-Type": "application/json"}
@@ -309,6 +345,7 @@ except ImportError:
                     "sessionId": session_id,
                     "timestamp": datetime.utcnow().isoformat(),
                     "sources": sources,
+                    "sourceLinks": source_links,
                 }),
             }
 

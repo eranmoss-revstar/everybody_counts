@@ -13,6 +13,7 @@ export interface ChatResponse {
   response: string;
   sessionId?: string | null;
   sources?: string[];
+  sourceLinks?: { name: string; url: string }[];
 }
 
 const BASE_URL = (process.env.REACT_APP_API_URL || 'http://localhost:3001').replace(/\/$/, '');
@@ -101,6 +102,7 @@ export async function queryDocs(
               response: event.response || '',
               sessionId: event.sessionId ?? null,
               sources: event.sources || [],
+              sourceLinks: event.sourceLinks || [],
             };
           }
         } catch (e: any) {

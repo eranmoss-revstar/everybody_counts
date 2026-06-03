@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Everybody Counts — Feedback Responses</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.7;
+      color: #1a1a2e;
+      background: #f4f6fa;
+      margin: 0;
+      padding: 40px 24px;
+    }
+
+    .page {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      padding: 48px 56px;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin: 0 0 6px 0;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 40px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead tr {
+      background: #1a1a2e;
+      color: #ffffff;
+    }
+
+    thead th {
+      padding: 14px 18px;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    thead th:first-child  { width: 40px; border-radius: 8px 0 0 0; }
+    thead th:last-child   { border-radius: 0 8px 0 0; }
+
+    tbody tr {
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    tbody tr:nth-child(even) {
+      background: #f9fafb;
+    }
+
+    tbody tr:hover {
+      background: #eef2ff;
+    }
+
+    td {
+      padding: 16px 18px;
+      vertical-align: top;
+      font-size: 14px;
+    }
+
+    td:first-child {
+      font-weight: 700;
+      color: #6b7280;
+      white-space: nowrap;
+      text-align: center;
+    }
+
+    td.comment {
+      color: #374151;
+      font-style: italic;
+    }
+
+    td.response {
+      color: #1a1a2e;
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 99px;
+      margin-bottom: 6px;
+      letter-spacing: 0.03em;
+    }
+
+    .badge-done     { background: #d1fae5; color: #065f46; }
+    .badge-feasible { background: #dbeafe; color: #1e40af; }
+    .badge-partial  { background: #fef3c7; color: #92400e; }
+    .badge-no       { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>Everybody Counts AI Tool — Feedback Responses</h1>
+    <p class="subtitle">Responses to reviewer comments on output quality &nbsp;·&nbsp; June 2026</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th style="width:38%">Comment</th>
+          <th style="width:54%">Response</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <td>1</td>
+          <td class="comment">While each section of the response for each activity is concise, there is still a lot of information overall, which can be rather timely to read and understand. There may need to be a rethink of the layout of content, as well as content used.</td>
+          <td class="response">
+            <span class="badge badge-partial">In Progress</span><br>
+            The response layout has been redesigned with a clearer card format. We will cap the number of activities returned per response (max 5) and instruct the agent to keep each description to 2–3 lines. Admin controls for response length (Brief / Standard / Detailed) are already in place.
+          </td>
+        </tr>
+
+        <tr>
+          <td>2</td>
+          <td class="comment">For this particular prompt, the word 'activities' to a teacher means something hands-on, fun and engaging.</td>
+          <td class="response">
+            <span class="badge badge-done">Implemented</span><br>
+            The system prompt now explicitly defines an activity as hands-on, pupil-facing and fun — distinct from a teaching strategy. The agent applies this definition whenever "activities" appears in a prompt.
+          </td>
+        </tr>
+
+        <tr>
+          <td>3</td>
+          <td class="comment">Outputted activities 1, 2 and 7 are what I would expect from this prompt, being that they have some sort of fun gimmick such as a spinning wheel.</td>
+          <td class="response">
+            <span class="badge badge-done">Confirmed</span><br>
+            This validates the activity definition. The system prompt has been aligned to this standard so only outputs of this type are returned when activities are requested.
+          </td>
+        </tr>
+
+        <tr>
+          <td>4</td>
+          <td class="comment">Outputted activities 3, 4 and 8 are what we would consider teaching strategies, as they are methods that we would expect students to consistently use.</td>
+          <td class="response">
+            <span class="badge badge-done">Implemented</span><br>
+            The agent is now instructed to separate activities from teaching strategies and label them accordingly. Teaching strategies should only appear if specifically requested or clearly labelled as such.
+          </td>
+        </tr>
+
+        <tr>
+          <td>5</td>
+          <td class="comment">Outputted activity 5 makes little sense in just the written form, I had to find the activity in the teacher notes and see the picture for it to be understandable.</td>
+          <td class="response">
+            <span class="badge badge-feasible">Workaround Only</span><br>
+            The knowledge base stores text only — images inside slides cannot be retrieved or displayed. A prompt instruction will be added so the agent flags these cases: <em>"Note: this activity references a diagram in the teacher notes — please refer to the original slide."</em>
+          </td>
+        </tr>
+
+        <tr>
+          <td>6</td>
+          <td class="comment">Outputted activity 6 would also be considered a teaching strategy, however it did contain errors which are present in the teaching notes itself.</td>
+          <td class="response">
+            <span class="badge badge-no">Data Issue</span><br>
+            The AI reproduces source material as written. Where errors exist in the teacher notes they will appear in the output. The fix requires correcting the source document, re-uploading to S3, and resyncing the knowledge base. This is a data quality task outside the AI system.
+          </td>
+        </tr>
+
+        <tr>
+          <td>7</td>
+          <td class="comment">Outputted activity 3 was also found to be explained very differently from what is in the teacher notes, this in turn changed it from an activity in the teacher notes to just a teaching strategy in the outputted response.</td>
+          <td class="response">
+            <span class="badge badge-done">Implemented</span><br>
+            Two changes address this: (1) the knowledge base now retrieves 12 chunks per query instead of 5, giving the agent more of the original text; (2) the system prompt instructs the agent to name and describe activities as they appear in the notes, not reinterpret them.
+          </td>
+        </tr>
+
+        <tr>
+          <td>8</td>
+          <td class="comment">When a response is on a particular topic such as 'Number Bonds', the AI should also look at content from related lessons — Number Bonds to 5; 6 and 7; 8 and 9 — as the activities are interchangeable with minor numerical adjustments.</td>
+          <td class="response">
+            <span class="badge badge-done">Implemented</span><br>
+            The system prompt now instructs the agent to search for related topic variants when a specific number set is mentioned, make multiple knowledge base queries if needed, and note when an activity comes from a related lesson.
+          </td>
+        </tr>
+
+        <tr>
+          <td>9</td>
+          <td class="comment">I would also expect the outputted response to come up with new or variations of activities in the teacher notes, rather than just plucking information from the teacher notes itself.</td>
+          <td class="response">
+            <span class="badge badge-done">Implemented</span><br>
+            The system prompt now explicitly instructs the agent to use retrieved materials as inspiration rather than text to reproduce, and to suggest practical variations or extensions beyond what is written in the notes.
+          </td>
+        </tr>
+
+        <tr>
+          <td>10</td>
+          <td class="comment">Output requirements may vary from input to input (e.g. when an input asks for activities, it should produce responses based on the content in the THINK, SOLVE and DEVELOP slides).</td>
+          <td class="response">
+            <span class="badge badge-feasible">Feasible — To Do</span><br>
+            The THINK / SOLVE / DEVELOP slide structure needs to be explained to the agent in the system prompt so it knows what to look for when generating activities. This is a prompt change that can be made once the slide structure is confirmed with the team.
+          </td>
+        </tr>
+
+        <tr>
+          <td>11</td>
+          <td class="comment">Some responses, especially for activities and methods, may benefit from visual examples to help speed up the understanding of an activity. Some people, no matter how much they read something, they can never visualise it.</td>
+          <td class="response">
+            <span class="badge badge-no">Not Feasible (This Phase)</span><br>
+            The knowledge base is text-only and cannot retrieve or display images from the teaching slides. Generating original diagrams would require a dedicated image generation layer, which is not in scope for this phase. The near-term workaround is flagging activities that depend on visual context (see comment 5).
+          </td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>

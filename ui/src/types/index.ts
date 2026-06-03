@@ -11,6 +11,7 @@ export interface Message {
     follow_up_suggestions?: string[];
     raw_data?: any[];
     sources?: string[];
+    sourceLinks?: { name: string; url: string }[];
   };
 }
 

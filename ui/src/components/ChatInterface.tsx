@@ -117,6 +117,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         metadata: {
           source: data.citation ?? undefined,
           sources: data.sources && data.sources.length > 0 ? data.sources : undefined,
+          sourceLinks: data.sourceLinks && data.sourceLinks.length > 0 ? data.sourceLinks : undefined,
         },
       };
 

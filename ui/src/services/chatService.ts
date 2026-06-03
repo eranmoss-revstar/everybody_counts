@@ -9,6 +9,7 @@ export interface ChatResponse {
   sessionId: string | null;
   followUpSuggestions: string[];
   sources: string[];
+  sourceLinks: { name: string; url: string }[];
 }
 
 export async function queryChat(
@@ -27,6 +28,7 @@ export async function queryChat(
       sessionId: data.sessionId ?? null,
       followUpSuggestions: [],
       sources: data.sources || [],
+      sourceLinks: data.sourceLinks || [],
     };
   }
 
@@ -41,5 +43,6 @@ export async function queryChat(
     sessionId: null,
     followUpSuggestions: data.follow_up_suggestions || [],
     sources: [],
+    sourceLinks: [],
   };
 }

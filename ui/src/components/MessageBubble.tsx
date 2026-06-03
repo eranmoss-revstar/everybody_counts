@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, AlertCircle } from 'lucide-react';
+import { Copy, Check, AlertCircle, ExternalLink } from 'lucide-react';
 import { MessageBubbleProps } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
 import { formatMessageContent } from '../utils/formatters';
@@ -244,15 +244,40 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           })}
         </div>
 
-        {/* Sources */}
-        {message.metadata?.sources && message.metadata.sources.length > 0 && (
+        {/* Source documents — clickable links to the originals */}
+        {message.metadata?.sourceLinks && message.metadata.sourceLinks.length > 0 ? (
+          <div className={`mt-4 pt-3 border-t text-xs ${
+            isDarkMode ? 'border-slate-700 text-slate-400' : 'border-slate-200 text-slate-500'
+          }`}>
+            <span className="font-semibold block mb-1.5">Source documents:</span>
+            <div className="flex flex-wrap gap-2">
+              {message.metadata.sourceLinks.map((link, i) => (
+                <a
+                  key={i}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg transition-colors duration-200 ${
+                    isDarkMode
+                      ? 'bg-slate-700/60 hover:bg-slate-700 text-blue-300'
+                      : 'bg-blue-50 hover:bg-blue-100 text-blue-700'
+                  }`}
+                  title="Open the original teaching document"
+                >
+                  <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                  {link.name.replace(/\.(pdf|pptx|docx)$/i, '')}
+                </a>
+              ))}
+            </div>
+          </div>
+        ) : message.metadata?.sources && message.metadata.sources.length > 0 ? (
           <div className={`mt-4 pt-2 border-t text-xs ${
             isDarkMode ? 'border-slate-700 text-slate-500' : 'border-slate-200 text-slate-400'
           }`}>
             <span className="font-semibold">Sources: </span>
             {message.metadata.sources.join(', ')}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
