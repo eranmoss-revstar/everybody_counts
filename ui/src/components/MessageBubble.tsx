@@ -6,26 +6,44 @@ import { formatMessageContent } from '../utils/formatters';
 
 // ─── Content block types ──────────────────────────────────────────────────────
 
-type BoldPart = { bold: boolean; text: string };
+type InlinePart =
+  | { type: 'text'; text: string }
+  | { type: 'bold'; text: string }
+  | { type: 'src'; name: string };
 
 type Block =
-  | { kind: 'title'; text: string }
-  | { kind: 'section'; label: string; bullets: BoldPart[][] }
-  | { kind: 'bullets'; items: BoldPart[][] }
-  | { kind: 'paragraph'; parts: BoldPart[] };
+  | { kind: 'title'; parts: InlinePart[] }
+  | { kind: 'section'; label: InlinePart[]; bullets: InlinePart[][] }
+  | { kind: 'bullets'; items: InlinePart[][] }
+  | { kind: 'paragraph'; parts: InlinePart[] };
+
+// Link lookup (source filename → presigned URL), provided per message.
+const LinkMapContext = React.createContext<Record<string, string>>({});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function parseBold(text: string): BoldPart[] {
-  return text.split(/\*\*(.*?)\*\*/g).map((t, i) => ({ bold: i % 2 === 1, text: t }));
+// Tokenise a line into text, **bold**, and [[src:FILENAME]] parts.
+function parseInline(text: string): InlinePart[] {
+  const parts: InlinePart[] = [];
+  const re = /\*\*(.*?)\*\*|\[\[src:\s*([^\]]+?)\s*\]\]/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push({ type: 'text', text: text.slice(last, m.index) });
+    if (m[1] !== undefined) parts.push({ type: 'bold', text: m[1] });
+    else if (m[2] !== undefined) parts.push({ type: 'src', name: m[2] });
+    last = re.lastIndex;
+  }
+  if (last < text.length) parts.push({ type: 'text', text: text.slice(last) });
+  return parts;
 }
 
 function isBullet(line: string) {
   return /^[-*]\s+/.test(line.trim());
 }
 
-function bulletText(line: string): BoldPart[] {
-  return parseBold(line.trim().replace(/^[-*]\s+/, ''));
+function bulletText(line: string): InlinePart[] {
+  return parseInline(line.trim().replace(/^[-*]\s+/, ''));
 }
 
 function parseContent(raw: string): Block[] {
@@ -41,7 +59,7 @@ function parseContent(raw: string): Block[] {
     // # / ## / ### title — strip all leading # characters
     const titleMatch = trimmed.match(/^#{1,6}\s+(.*)/);
     if (titleMatch) {
-      blocks.push({ kind: 'title', text: titleMatch[1].replace(/\*\*/g, '') });
+      blocks.push({ kind: 'title', parts: parseInline(titleMatch[1]) });
       i++; continue;
     }
 
@@ -51,8 +69,8 @@ function parseContent(raw: string): Block[] {
     // **Bold label:** section — collect following bullets
     const sectionMatch = trimmed.match(/^\*\*(.+:)\*\*\s*$/);
     if (sectionMatch) {
-      const label = sectionMatch[1];
-      const bullets: BoldPart[][] = [];
+      const label = parseInline(`**${sectionMatch[1]}**`);
+      const bullets: InlinePart[][] = [];
       i++;
       while (i < lines.length) {
         const next = lines[i].trim();
@@ -66,7 +84,7 @@ function parseContent(raw: string): Block[] {
 
     // Plain bullet(s)
     if (isBullet(trimmed)) {
-      const items: BoldPart[][] = [bulletText(trimmed)];
+      const items: InlinePart[][] = [bulletText(trimmed)];
       i++;
       while (i < lines.length && isBullet(lines[i])) {
         items.push(bulletText(lines[i])); i++;
@@ -76,21 +94,45 @@ function parseContent(raw: string): Block[] {
     }
 
     // Paragraph
-    blocks.push({ kind: 'paragraph', parts: parseBold(trimmed) });
+    blocks.push({ kind: 'paragraph', parts: parseInline(trimmed) });
     i++;
   }
 
   return blocks;
 }
 
-// ─── Inline bold renderer ─────────────────────────────────────────────────────
+// ─── Inline renderer (bold + source link chips) ────────────────────────────────
 
-function BoldText({ parts }: { parts: BoldPart[] }) {
+function SourceChip({ name }: { name: string }) {
+  const linkMap = React.useContext(LinkMapContext);
+  const url = linkMap[name] || linkMap[name.replace(/\.(pdf|pptx|docx)$/i, '')];
+  const label = name.replace(/\.(pdf|pptx|docx)$/i, '');
+  if (!url) {
+    // No matching document — render a subtle non-link label rather than raw marker
+    return <span className="opacity-50 text-xs"> ({label})</span>;
+  }
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title="Open the original teaching document"
+      className="inline-flex items-center gap-0.5 align-baseline mx-0.5 px-1.5 py-0.5 rounded-md text-xs no-underline bg-blue-500/15 text-blue-500 hover:bg-blue-500/25 transition-colors"
+    >
+      <ExternalLink className="w-3 h-3" />
+      {label}
+    </a>
+  );
+}
+
+function Inline({ parts }: { parts: InlinePart[] }) {
   return (
     <>
-      {parts.map((p, i) =>
-        p.bold ? <strong key={i} className="font-bold">{p.text}</strong> : <React.Fragment key={i}>{p.text}</React.Fragment>
-      )}
+      {parts.map((p, i) => {
+        if (p.type === 'bold') return <strong key={i} className="font-bold">{p.text}</strong>;
+        if (p.type === 'src') return <SourceChip key={i} name={p.name} />;
+        return <React.Fragment key={i}>{p.text}</React.Fragment>;
+      })}
     </>
   );
 }
@@ -153,8 +195,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
   // ── Assistant card ─────────────────────────────────────────────────────────
   const blocks = parseContent(formatMessageContent(displayed));
+  const linkMap: Record<string, string> = {};
+  (message.metadata?.sourceLinks || []).forEach(l => {
+    linkMap[l.name] = l.url;
+    linkMap[l.name.replace(/\.(pdf|pptx|docx)$/i, '')] = l.url;
+  });
 
   return (
+    <LinkMapContext.Provider value={linkMap}>
     <div className="flex justify-start mb-5 group">
       <div className={`relative w-full rounded-2xl border px-6 py-5 ${
         isError
@@ -193,7 +241,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
               return (
                 <p key={idx} className="font-bold underline underline-offset-4 decoration-1 pb-1"
                    style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', cursive", fontSize: '17px' }}>
-                  {block.text}
+                  <Inline parts={block.parts} />
                 </p>
               );
             }
@@ -204,14 +252,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
                   <div className={`flex-shrink-0 font-bold w-48 ${
                     isDarkMode ? 'text-slate-100' : 'text-slate-900'
                   }`}>
-                    {block.label}
+                    <Inline parts={block.label} />
                   </div>
                   <div className="flex-1 space-y-1">
                     {block.bullets.length === 0 && <span className="opacity-40">—</span>}
                     {block.bullets.map((parts, bi) => (
                       <div key={bi} className="flex gap-1.5">
                         <span className="flex-shrink-0 mt-px">•</span>
-                        <span><BoldText parts={parts} /></span>
+                        <span><Inline parts={parts} /></span>
                       </div>
                     ))}
                   </div>
@@ -225,7 +273,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
                   {block.items.map((parts, bi) => (
                     <div key={bi} className="flex gap-1.5">
                       <span className="flex-shrink-0 mt-px">•</span>
-                      <span><BoldText parts={parts} /></span>
+                      <span><Inline parts={parts} /></span>
                     </div>
                   ))}
                 </div>
@@ -235,7 +283,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             if (block.kind === 'paragraph') {
               return (
                 <p key={idx}>
-                  <BoldText parts={block.parts} />
+                  <Inline parts={block.parts} />
                 </p>
               );
             }
@@ -243,43 +291,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             return null;
           })}
         </div>
-
-        {/* Source documents — clickable links to the originals */}
-        {message.metadata?.sourceLinks && message.metadata.sourceLinks.length > 0 ? (
-          <div className={`mt-4 pt-3 border-t text-xs ${
-            isDarkMode ? 'border-slate-700 text-slate-400' : 'border-slate-200 text-slate-500'
-          }`}>
-            <span className="font-semibold block mb-1.5">Source documents:</span>
-            <div className="flex flex-wrap gap-2">
-              {message.metadata.sourceLinks.map((link, i) => (
-                <a
-                  key={i}
-                  href={link.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg transition-colors duration-200 ${
-                    isDarkMode
-                      ? 'bg-slate-700/60 hover:bg-slate-700 text-blue-300'
-                      : 'bg-blue-50 hover:bg-blue-100 text-blue-700'
-                  }`}
-                  title="Open the original teaching document"
-                >
-                  <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                  {link.name.replace(/\.(pdf|pptx|docx)$/i, '')}
-                </a>
-              ))}
-            </div>
-          </div>
-        ) : message.metadata?.sources && message.metadata.sources.length > 0 ? (
-          <div className={`mt-4 pt-2 border-t text-xs ${
-            isDarkMode ? 'border-slate-700 text-slate-500' : 'border-slate-200 text-slate-400'
-          }`}>
-            <span className="font-semibold">Sources: </span>
-            {message.metadata.sources.join(', ')}
-          </div>
-        ) : null}
       </div>
     </div>
+    </LinkMapContext.Provider>
   );
 };
 

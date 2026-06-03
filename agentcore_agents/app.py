@@ -46,14 +46,15 @@ Always use the retrieve_teaching_materials tool to search the knowledge base bef
 
 8. **Generate variations — do not copy.** Use retrieved materials as inspiration, not as text to reproduce. Describe activities in your own words. Where possible, suggest a practical variation or extension that goes slightly beyond what is written in the teacher notes — this is what makes the response more useful than simply reading the notes directly.
 
-9. **Flag visual-dependent activities.** If an activity relies on a diagram, picture, or visual layout that cannot be fully conveyed in words, add a brief note: *Note: this activity uses a visual — see the original teacher notes linked below.* The original document is automatically linked beneath your response, so the teacher can open it to view the diagram.
+9. **Flag visual-dependent activities.** If an activity relies on a diagram, picture, or visual layout that cannot be fully conveyed in words, add a brief note: *Note: this activity uses a visual — open the linked document to view the diagram.*
 
 10. **Keep it focused.** Return no more than 5 activities unless the teacher asks for more. Keep each activity description to a few short bullet points — enough to run it, not a full transcript of the notes.
 
+11. **Cite sources inline.** When a specific activity, strategy, or section is drawn from a particular teaching document, place an inline citation marker at the end of that section using exactly this format: `[[src:FILENAME]]` — where FILENAME is the exact source filename. Take the filename from the "[Retrieved from: ...]" header returned by the retrieve tool (e.g. `[[src:TN_M7_L3_en.pdf]]`). Put the marker at the end of the relevant heading line, sentence, or final bullet of that section. Do not explain the marker or alter its format. Each marker becomes a clickable link to the original document, shown exactly where it is relevant — so the teacher can open the right document in context.
+
 If the question is not related to KS1 mathematics teaching (Year 1 or Year 2), politely explain that this assistant currently supports Year 1 and Year 2 maths only. Do not suggest alternative resources, tools, websites, or other services — simply state the scope limitation and invite the teacher to ask a maths question instead.
 
-After your response, if you retrieved documents, append a final line in exactly this format (no extra text):
-SOURCES: filename1.pdf, filename2.pdf"""
+Do not append a SOURCES line. Citations are provided inline using the [[src:...]] markers described in rule 11."""
 
 # ─── Format / output-type prompt additions ────────────────────────────────────
 _FORMAT_INSTRUCTIONS = {
@@ -240,26 +241,17 @@ def invoke(payload: Dict[str, Any]) -> Dict[str, Any]:
 
         response_text = result.message if hasattr(result, "message") and result.message else str(result)
 
-        # Extract sources from SOURCES: line appended by the agent
-        sources = []
+        # Legacy: strip any SOURCES: line if the model still appends one
         if "SOURCES:" in response_text:
-            parts = response_text.rsplit("SOURCES:", 1)
-            response_text = parts[0].strip()
-            sources = [s.strip() for s in parts[1].strip().split(",") if s.strip()]
+            response_text = response_text.rsplit("SOURCES:", 1)[0].strip()
 
-        # Build source_uris (filename → full S3 URI) for clickable document links.
-        # Prefer the cited sources; fall back to all retrieved docs if none cited.
-        source_uris = []
-        for name in sources:
-            uri = _retrieval_source_map.get(name)
-            if uri:
-                source_uris.append({"name": name, "uri": uri})
-        if not source_uris and _retrieval_source_map:
-            source_uris = [{"name": n, "uri": u} for n, u in _retrieval_source_map.items()]
+        # Return every retrieved document as a {name, uri} pair so each inline
+        # [[src:FILENAME]] marker in the response can resolve to a clickable link.
+        source_uris = [{"name": n, "uri": u} for n, u in _retrieval_source_map.items()]
 
         return {
             "result": response_text,
-            "sources": sources,
+            "sources": [s["name"] for s in source_uris],
             "source_uris": source_uris,
             "session_id": session_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
