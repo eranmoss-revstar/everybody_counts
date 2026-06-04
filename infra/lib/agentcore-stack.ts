@@ -796,7 +796,7 @@ export class AgentCoreStack extends Stack {
       // config forces a CFN replacement, and a new name avoids the create-before-
       // delete name collision. The old data source has dataDeletionPolicy DELETE,
       // so its vectors are purged on replacement (re-ingest repopulates).
-      name: "everybody-counts-uploads-mm",
+      name: "everybody-counts-uploads-multimodal",
       description: "Admin-uploaded teaching materials (PDF, DOCX, PPTX) — multimodal parsing",
       dataDeletionPolicy: "DELETE",
       dataSourceConfiguration: {
