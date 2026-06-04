@@ -235,21 +235,83 @@ export class AgentCoreStack extends Stack {
           },
         ],
       },
+      // Topic policy — backstop for the system prompt: deny common off-scope
+      // categories so the assistant stays on KS1 teaching even under adversarial prompts.
+      topicPolicyConfig: {
+        topicsConfig: [
+          {
+            name: "Medical or Health Advice",
+            definition:
+              "Requests for medical diagnosis, treatment, medication, mental-health, or physical-health advice for children or adults.",
+            examples: [
+              "What medication should I give a child with ADHD?",
+              "Is this rash on a pupil dangerous?",
+            ],
+            type: "DENY",
+          },
+          {
+            name: "Legal Advice",
+            definition:
+              "Requests for interpretation of laws, legal rights, safeguarding-law specifics, or other legal guidance.",
+            examples: [
+              "Can I legally restrain a pupil?",
+              "What are my legal rights if a parent sues the school?",
+            ],
+            type: "DENY",
+          },
+          {
+            name: "Financial or Investment Advice",
+            definition:
+              "Requests for financial, investment, tax, pension, or money-management advice.",
+            examples: [
+              "How should I invest my teaching pension?",
+              "What stocks should I buy?",
+            ],
+            type: "DENY",
+          },
+          {
+            name: "Non-Educational Topics",
+            definition:
+              "Requests unrelated to teaching, education, or the school curriculum — including general knowledge, entertainment, celebrities, sports, current events, politics, or personal-life advice.",
+            examples: [
+              "Who is going to win the election?",
+              "Write me a poem about football.",
+              "What should I cook for dinner tonight?",
+            ],
+            type: "DENY",
+          },
+        ],
+      },
+      // Profanity filter (managed list) — appropriate for a tool used in a primary-school context.
+      wordPolicyConfig: {
+        managedWordListsConfig: [{ type: "PROFANITY" }],
+      },
       sensitiveInformationPolicyConfig: {
         piiEntitiesConfig: [
+          // Anonymise contact/identity details that may appear in pupil data.
           { type: "EMAIL", action: "ANONYMIZE" },
+          { type: "NAME", action: "ANONYMIZE" },
+          { type: "PHONE", action: "ANONYMIZE" },
+          { type: "ADDRESS", action: "ANONYMIZE" },
+          // Block high-risk identifiers outright.
+          { type: "PASSWORD", action: "BLOCK" },
           { type: "US_SOCIAL_SECURITY_NUMBER", action: "BLOCK" },
           { type: "CREDIT_DEBIT_CARD_NUMBER", action: "BLOCK" },
+          { type: "UK_NATIONAL_INSURANCE_NUMBER", action: "BLOCK" },
+          { type: "UK_NATIONAL_HEALTH_SERVICE_NUMBER", action: "BLOCK" },
         ],
       },
     });
 
+    // Bumped logical ID to V2 to force CFN to publish a NEW version snapshotting
+    // the updated DRAFT (topic policy, expanded PII, profanity). A new logical ID
+    // creates a new version; editing the description in place would not.
     const guardrailVersion = new bedrock.CfnGuardrailVersion(
       this,
-      "AgentCoreGuardrailVersion",
+      "AgentCoreGuardrailVersionV2",
       {
         guardrailIdentifier: guardrail.attrGuardrailId,
-        description: "Initial version",
+        description: "Topic policy, expanded PII, profanity filter",
       }
     );
 
