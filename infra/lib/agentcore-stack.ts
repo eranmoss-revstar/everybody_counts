@@ -734,12 +734,19 @@ export class AgentCoreStack extends Stack {
     // ─── Import pre-existing IAM roles from OSSFoundationStack ────────────
     const kbRole = iam.Role.fromRoleName(this, "KnowledgeBaseRole", KB_ROLE_NAME);
 
-    // S3 access is added here because the bucket lives in this stack
+    // S3 access is added here because the bucket lives in this stack.
+    // bedrock:InvokeModel lets the KB run the foundation-model parser at ingestion.
     kbRole.attachInlinePolicy(new iam.Policy(this, "KBRoleS3Policy", {
-      statements: [new iam.PolicyStatement({
-        actions: ["s3:GetObject", "s3:ListBucket"],
-        resources: [agentCoreBucket.bucketArn, `${agentCoreBucket.bucketArn}/uploads/*`],
-      })],
+      statements: [
+        new iam.PolicyStatement({
+          actions: ["s3:GetObject", "s3:ListBucket"],
+          resources: [agentCoreBucket.bucketArn, `${agentCoreBucket.bucketArn}/uploads/*`],
+        }),
+        new iam.PolicyStatement({
+          actions: ["bedrock:InvokeModel"],
+          resources: [`arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0`],
+        }),
+      ],
     }));
 
     // ─── Bedrock Knowledge Base ────────────────────────────────────────────
@@ -770,6 +777,11 @@ export class AgentCoreStack extends Stack {
         },
       },
     });
+    // Parsing model — a multimodal FM reads each document at ingestion and writes
+    // text descriptions of diagrams, charts, tables and visual layouts, so the KB
+    // captures visual content as searchable text (no image-display pipeline needed).
+    const parsingModelArn = `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0`;
+
     const dataSource = new bedrock.CfnDataSource(this, "EverybodyCountsDataSource", {
       knowledgeBaseId: knowledgeBase.attrKnowledgeBaseId,
       name: "everybody-counts-uploads",
@@ -779,6 +791,23 @@ export class AgentCoreStack extends Stack {
         s3Configuration: {
           bucketArn: agentCoreBucket.bucketArn,
           inclusionPrefixes: ["uploads/"],
+        },
+      },
+      vectorIngestionConfiguration: {
+        parsingConfiguration: {
+          parsingStrategy: "BEDROCK_FOUNDATION_MODEL",
+          bedrockFoundationModelConfiguration: {
+            modelArn: parsingModelArn,
+            parsingPrompt: {
+              parsingPromptText:
+                "Transcribe all text from this page of a UK KS1 (Year 1–2) maths teaching document. " +
+                "In addition, for every diagram, chart, table, illustration, model, or visual layout on the page, " +
+                "write a clear text description of what it shows and how it is arranged, on its own line prefixed with 'VISUAL: '. " +
+                "Describe place-value charts, part-whole models, number lines, arrays, ten-frames, and manipulative arrangements " +
+                "precisely enough that a teacher could picture and recreate them without seeing the original image. " +
+                "Preserve the reading order of the page.",
+            },
+          },
         },
       },
     });
