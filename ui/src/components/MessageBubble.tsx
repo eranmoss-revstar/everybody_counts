@@ -42,6 +42,23 @@ function isBullet(line: string) {
   return /^[-*]\s+/.test(line.trim());
 }
 
+// Remove any trailing "Sources:" / "References:" / "Source documents:" block the
+// model may still append — citations are shown inline, so the bottom list is noise.
+function stripTrailingSources(text: string): string {
+  const lines = text.split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const t = lines[i].trim();
+    if (!t) continue;
+    if (/^\**\s*(sources?|references?|source\s+documents?)\s*:?\s*\**\s*$/i.test(t)
+        || /^\**\s*(sources?|references?)\s*:/i.test(t)) {
+      return lines.slice(0, i).join('\n').trimEnd();
+    }
+    // Stop scanning once we hit substantive content that is not a bullet/link line
+    if (!isBullet(t) && !/\[\[src:/.test(t) && !/\.(pdf|pptx|docx)/i.test(t)) break;
+  }
+  return text;
+}
+
 function bulletText(line: string): InlinePart[] {
   return parseInline(line.trim().replace(/^[-*]\s+/, ''));
 }
@@ -194,7 +211,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   }
 
   // ── Assistant card ─────────────────────────────────────────────────────────
-  const blocks = parseContent(formatMessageContent(displayed));
+  const blocks = parseContent(stripTrailingSources(formatMessageContent(displayed)));
   const linkMap: Record<string, string> = {};
   (message.metadata?.sourceLinks || []).forEach(l => {
     linkMap[l.name] = l.url;
