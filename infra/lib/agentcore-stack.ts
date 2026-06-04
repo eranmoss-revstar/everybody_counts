@@ -743,7 +743,7 @@ export class AgentCoreStack extends Stack {
           resources: [agentCoreBucket.bucketArn, `${agentCoreBucket.bucketArn}/uploads/*`],
         }),
         new iam.PolicyStatement({
-          actions: ["bedrock:InvokeModel"],
+          actions: ["bedrock:InvokeModel", "bedrock:GetInferenceProfile"],
           // Inference profile + the underlying foundation model in each region the
           // us. profile can route to (cross-region inference requires all of them).
           resources: [
