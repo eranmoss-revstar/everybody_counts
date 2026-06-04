@@ -111,12 +111,28 @@
     .badge-feasible { background: #dbeafe; color: #1e40af; }
     .badge-partial  { background: #fef3c7; color: #92400e; }
     .badge-no       { background: #fee2e2; color: #991b1b; }
+
+    .summary-line {
+      font-size: 13px;
+      color: #374151;
+      background: #f0f4ff;
+      border-left: 3px solid #1a1a2e;
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin-bottom: 36px;
+      line-height: 1.6;
+    }
   </style>
 </head>
 <body>
   <div class="page">
     <h1>Everybody Counts AI Tool — Feedback Responses</h1>
-    <p class="subtitle">Responses to reviewer comments on output quality &nbsp;·&nbsp; June 2026</p>
+    <p class="subtitle">Responses to reviewer comments on output quality &nbsp;·&nbsp; Updated 4 June 2026</p>
+    <p class="summary-line">
+      <strong>Summary:</strong> 9 of 11 points addressed — 8 implemented and 1 with a strong workaround.
+      1 point (THINK / SOLVE / DEVELOP slides) is feasible and awaiting confirmation of the slide structure.
+      1 point (errors in the teacher notes) is a source-document data fix outside the AI system.
+    </p>
 
     <table>
       <thead>
@@ -132,8 +148,8 @@
           <td>1</td>
           <td class="comment">While each section of the response for each activity is concise, there is still a lot of information overall, which can be rather timely to read and understand. There may need to be a rethink of the layout of content, as well as content used.</td>
           <td class="response">
-            <span class="badge badge-partial">In Progress</span><br>
-            The response layout has been redesigned with a clearer card format. We will cap the number of activities returned per response (max 5) and instruct the agent to keep each description to 2–3 lines. Admin controls for response length (Brief / Standard / Detailed) are already in place.
+            <span class="badge badge-done">Implemented</span><br>
+            The response layout has been redesigned with a clearer card format. The agent is now capped at a maximum of 5 activities per response, each kept to a few short bullet points rather than a full transcript of the notes. Admin controls for response length (Brief / Standard / Detailed) are also in place.
           </td>
         </tr>
 
@@ -168,8 +184,8 @@
           <td>5</td>
           <td class="comment">Outputted activity 5 makes little sense in just the written form, I had to find the activity in the teacher notes and see the picture for it to be understandable.</td>
           <td class="response">
-            <span class="badge badge-feasible">Workaround Only</span><br>
-            The knowledge base stores text only — images inside slides cannot be retrieved or displayed. A prompt instruction will be added so the agent flags these cases: <em>"Note: this activity references a diagram in the teacher notes — please refer to the original slide."</em>
+            <span class="badge badge-done">Implemented</span><br>
+            The knowledge base stores text only — images inside slides cannot be displayed. Two things now address this: (1) the agent flags visual-dependent activities with a note to open the original document; (2) every section carries an inline clickable link to the exact source document (a secure, time-limited URL), so the teacher opens the original slide in one click, right where it is relevant.
           </td>
         </tr>
 
@@ -222,8 +238,8 @@
           <td>11</td>
           <td class="comment">Some responses, especially for activities and methods, may benefit from visual examples to help speed up the understanding of an activity. Some people, no matter how much they read something, they can never visualise it.</td>
           <td class="response">
-            <span class="badge badge-no">Not Feasible (This Phase)</span><br>
-            The knowledge base is text-only and cannot retrieve or display images from the teaching slides. Generating original diagrams would require a dedicated image generation layer, which is not in scope for this phase. The near-term workaround is flagging activities that depend on visual context (see comment 5).
+            <span class="badge badge-feasible">Workaround In Place</span><br>
+            The knowledge base is text-only and cannot render images from the teaching slides — generating original diagrams would require a dedicated image layer, out of scope for this phase. However, each section of the response now includes an inline clickable link to the original document, so the teacher reaches the relevant visual in one click (see comment 5).
           </td>
         </tr>
 
