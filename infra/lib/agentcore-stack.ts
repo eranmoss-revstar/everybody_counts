@@ -5,6 +5,7 @@ import {
   CfnOutput,
   RemovalPolicy,
   Tags,
+  Size,
 } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as s3 from "aws-cdk-lib/aws-s3";
@@ -906,6 +907,34 @@ export class AgentCoreStack extends Stack {
         actions: ["bedrock:Retrieve"],
         resources: [knowledgeBase.attrKnowledgeBaseArn],
       })
+    );
+
+    // ─── PPTX → PDF Converter Lambda (LibreOffice container) ───────────────
+    // PowerPoint isn't a KB-supported format. This converts uploaded .pptx/.ppt
+    // to PDF (KB-supported, and parsed by the multimodal model), then deletes the
+    // original. Runs before kb-sync via the S3 event; the produced PDF re-triggers
+    // kb-sync for ingestion.
+    const pptxConverter = new lambda.DockerImageFunction(this, "PptxConverterLambda", {
+      functionName: "everybody-counts-pptx-converter",
+      code: lambda.DockerImageCode.fromImageAsset(
+        join(__dirname, "../../functions/pptx-converter"),
+      ),
+      timeout: Duration.minutes(5),
+      memorySize: 2048,
+      ephemeralStorageSize: Size.gibibytes(2),
+    });
+    agentCoreBucket.grantReadWrite(pptxConverter);
+    agentCoreBucket.grantDelete(pptxConverter);
+
+    agentCoreBucket.addEventNotification(
+      s3.EventType.OBJECT_CREATED,
+      new s3n.LambdaDestination(pptxConverter),
+      { prefix: "uploads/", suffix: ".pptx" },
+    );
+    agentCoreBucket.addEventNotification(
+      s3.EventType.OBJECT_CREATED,
+      new s3n.LambdaDestination(pptxConverter),
+      { prefix: "uploads/", suffix: ".ppt" },
     );
 
     // ─── KB Sync Lambda ────────────────────────────────────────────────────
