@@ -736,7 +736,7 @@ export class AgentCoreStack extends Stack {
 
     // S3 access is added here because the bucket lives in this stack.
     // bedrock:InvokeModel lets the KB run the foundation-model parser at ingestion.
-    kbRole.attachInlinePolicy(new iam.Policy(this, "KBRoleS3Policy", {
+    const kbRolePolicy = new iam.Policy(this, "KBRoleS3Policy", {
       statements: [
         new iam.PolicyStatement({
           actions: ["s3:GetObject", "s3:ListBucket"],
@@ -754,7 +754,8 @@ export class AgentCoreStack extends Stack {
           ],
         }),
       ],
-    }));
+    });
+    kbRole.attachInlinePolicy(kbRolePolicy);
 
     // ─── Bedrock Knowledge Base ────────────────────────────────────────────
     // The vector index "everybody-counts-index" must exist in the AOSS collection
@@ -824,6 +825,11 @@ export class AgentCoreStack extends Stack {
         },
       },
     });
+
+    // The KB role must have GetInferenceProfile/InvokeModel BEFORE the data source
+    // is validated — without this dependency CFN can validate the data source first
+    // and fail, rolling the policy back and leaving us stuck in a loop.
+    dataSource.node.addDependency(kbRolePolicy);
 
     // ─── Wire KB into AgentCore Runtime ───────────────────────────────────
     // Now that knowledgeBase exists, inject its ID into the Runtime env and
