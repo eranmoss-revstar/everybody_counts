@@ -744,7 +744,14 @@ export class AgentCoreStack extends Stack {
         }),
         new iam.PolicyStatement({
           actions: ["bedrock:InvokeModel"],
-          resources: [`arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0`],
+          // Inference profile + the underlying foundation model in each region the
+          // us. profile can route to (cross-region inference requires all of them).
+          resources: [
+            `arn:aws:bedrock:${this.region}:${this.account}:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0`,
+            "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0",
+          ],
         }),
       ],
     }));
@@ -780,7 +787,8 @@ export class AgentCoreStack extends Stack {
     // Parsing model — a multimodal FM reads each document at ingestion and writes
     // text descriptions of diagrams, charts, tables and visual layouts, so the KB
     // captures visual content as searchable text (no image-display pipeline needed).
-    const parsingModelArn = `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0`;
+    // Uses the Claude Sonnet 4.5 cross-region inference profile (on-demand).
+    const parsingModelArn = `arn:aws:bedrock:${this.region}:${this.account}:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0`;
 
     const dataSource = new bedrock.CfnDataSource(this, "EverybodyCountsDataSource", {
       knowledgeBaseId: knowledgeBase.attrKnowledgeBaseId,
