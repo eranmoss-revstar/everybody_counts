@@ -1,16 +1,20 @@
-# LibreOffice-based PPTX→PDF converter on the AWS Lambda Python base (Amazon Linux 2023).
-FROM public.ecr.aws/lambda/python:3.12
+# LibreOffice-based PPTX→PDF converter.
+# The AWS Lambda / Amazon Linux 2023 base images don't carry LibreOffice in their
+# repos, so we build on Debian (which does) and add the Lambda Runtime Interface
+# Client to make the image Lambda-compatible.
+FROM python:3.12-slim-bookworm
 
-# LibreOffice (headless) + a few fonts so slide text renders correctly.
-RUN dnf install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
         libreoffice-impress \
         libreoffice-core \
-        google-noto-sans-fonts \
-        google-noto-serif-fonts \
-        dejavu-sans-fonts \
-    && dnf clean all \
-    && rm -rf /var/cache/dnf
+        fonts-dejavu \
+        fonts-noto-core \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY index.py ${LAMBDA_TASK_ROOT}/
+RUN pip install --no-cache-dir awslambdaric boto3
 
+WORKDIR /var/task
+COPY index.py /var/task/
+
+ENTRYPOINT ["python", "-m", "awslambdaric"]
 CMD ["index.lambda_handler"]
