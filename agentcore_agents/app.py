@@ -221,25 +221,15 @@ def invoke(payload: Dict[str, Any]) -> Dict[str, Any]:
 
         agent = _get_agent(temperature, max_tokens, fmt, output_type)
 
-        if MEMORY_ID:
-            try:
-                from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
-                from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
-
-                config = AgentCoreMemoryConfig(
-                    memory_id=MEMORY_ID,
-                    session_id=session_id,
-                    actor_id=actor_id,
-                )
-                with AgentCoreMemorySessionManager(config, region_name=AWS_REGION) as session_manager:
-                    agent.session_manager = session_manager
-                    result = agent(user_message)
-                    agent.session_manager = None
-            except Exception as e:
-                logger.warning(f"Memory session failed, invoking without memory: {e}")
-                result = agent(user_message)
-        else:
-            result = agent(user_message)
+        # CRITICAL: the agent is a warm, module-level global reused across Lambda
+        # invocations, so its internal `messages` list persists between turns (and
+        # even across different users on the same container). Combined with a
+        # truncated previous answer, the model would "continue" the prior response
+        # instead of answering the new question. Conversation context is already
+        # supplied by the integration Lambda as a prepended [Conversation History]
+        # block in the prompt, so we reset the agent to a clean state every call.
+        agent.messages = []
+        result = agent(user_message)
 
         response_text = result.message if hasattr(result, "message") and result.message else str(result)
 
