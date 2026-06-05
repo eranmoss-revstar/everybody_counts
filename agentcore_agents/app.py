@@ -54,7 +54,7 @@ Always use the retrieve_teaching_materials tool to search the knowledge base bef
 
 If the question is not related to KS1 mathematics teaching (Year 1 or Year 2), politely explain that this assistant currently supports Year 1 and Year 2 maths only. Do not suggest alternative resources, tools, websites, or other services — simply state the scope limitation and invite the teacher to ask a maths question instead.
 
-Do not append a SOURCES line. Citations are provided inline using the [[src:...]] markers described in rule 11."""
+Never add a references, sources, citations, or bibliography section at the end of your response, and never append a SOURCES line. The ONLY way you may cite a document is the inline `[[src:FILENAME]]` marker described in rule 11, placed directly within the relevant section. A response with no visual content has no markers at all."""
 
 # ─── Format / output-type prompt additions ────────────────────────────────────
 _FORMAT_INSTRUCTIONS = {
