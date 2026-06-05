@@ -88,27 +88,26 @@ def _build_prompt(user_message: str, history: list) -> str:
     # the previous answer instead of answering the new question. History is for
     # light continuity ("tell me more", "what about Year 2"), not re-feeding whole
     # responses, so assistant turns are capped to a short snippet.
+    #
+    # IMPORTANT: keep this as NEUTRAL data only — no imperative instructions. The
+    # Bedrock guardrail PROMPT_ATTACK filter flags instruction-like text embedded in
+    # user input as a prompt-injection attempt and blocks the whole request. The
+    # "answer the most recent message" instruction lives in the system prompt instead.
     recent = history[-6:]
     if not recent:
         return user_message
 
-    lines = [
-        "You are in an ongoing chat. The earlier turns below are background only.",
-        "Answer ONLY the new question in [Current Question]. If it changes topic,"
-        " switch fully and do not continue the previous answer.",
-        "",
-        "[Earlier turns]",
-    ]
+    lines = ["[Earlier conversation — for context only]"]
     for turn in recent:
         role = turn.get("role", "user").capitalize()
         content = (turn.get("content", "") or "").strip()
         if role == "Assistant" and len(content) > 300:
-            content = content[:300].rstrip() + " …[earlier answer trimmed]"
+            content = content[:300].rstrip() + " …"
         else:
             content = content[:600]
         lines.append(f"{role}: {content}")
     lines.append("")
-    lines.append(f"[Current Question]\n{user_message}")
+    lines.append(f"[Current question]\n{user_message}")
     return "\n".join(lines)
 
 
