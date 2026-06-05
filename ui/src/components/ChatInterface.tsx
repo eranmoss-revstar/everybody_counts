@@ -17,6 +17,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 }) => {
   const [inputMessage, setInputMessage] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isRendering, setIsRendering] = useState<boolean>(false);
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [progressMessage, setProgressMessage] = useState<string>('');
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
@@ -76,7 +77,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   const handleSendMessage = async (overrideMessage?: string): Promise<void> => {
     const text = (overrideMessage || inputMessage).trim();
-    if (!text || !session || isLoading) return;
+    if (!text || !session || isLoading || isRendering) return;
 
     sessionManager.extendSession();
 
@@ -124,6 +125,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       onUpdateSession(session.id, {
         messages: [...updatedMessages, assistantMessage],
       });
+
+      // Lock input until the typewriter (≈25 words/sec in MessageBubble) finishes
+      // rendering, so a new question can't collide with the response still typing.
+      const wordCount = (data.response || '').split(/\s+/).length;
+      const renderMs = Math.min((wordCount / 25) * 1000 + 300, 20000);
+      setIsRendering(true);
+      setTimeout(() => setIsRendering(false), renderMs);
 
     } catch (error: any) {
       console.error('Error sending message:', error);
@@ -358,20 +366,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder={isLoading ? "Thinking..." : "Ask about KS1 maths teaching..."}
+                placeholder={isLoading ? "Thinking..." : isRendering ? "Writing response…" : "Ask about KS1 maths teaching..."}
                 className={`w-full px-4 py-3 border rounded-2xl resize-none transition-all duration-300 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 min-h-[44px] max-h-32 ${
                   isDarkMode
                     ? 'bg-slate-700/80 backdrop-blur-sm border-slate-600 text-slate-100 placeholder-slate-400 focus:bg-slate-700/90'
                     : 'bg-white/90 backdrop-blur-sm border-slate-300 text-slate-900 placeholder-slate-500 focus:bg-white'
                 }`}
                 rows={1}
-                disabled={isLoading}
+                disabled={isLoading || isRendering}
               />
             </div>
 
             <button
               onClick={() => handleSendMessage()}
-              disabled={!inputMessage.trim() || isLoading}
+              disabled={!inputMessage.trim() || isLoading || isRendering}
               className={`px-6 py-3 rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl min-w-[80px] justify-center flex items-center space-x-2 ${
                 isDarkMode
                   ? 'bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white'

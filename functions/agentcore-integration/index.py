@@ -83,16 +83,32 @@ def _verify_token(event: dict) -> bool:
 
 
 def _build_prompt(user_message: str, history: list) -> str:
-    recent = history[-14:]
+    # Keep only the last few turns, and TRIM long assistant answers. Full lesson
+    # plans (600+ words) pasted verbatim make the model anchor to and "continue"
+    # the previous answer instead of answering the new question. History is for
+    # light continuity ("tell me more", "what about Year 2"), not re-feeding whole
+    # responses, so assistant turns are capped to a short snippet.
+    recent = history[-6:]
     if not recent:
         return user_message
-    lines = ["[Conversation History]"]
+
+    lines = [
+        "You are in an ongoing chat. The earlier turns below are background only.",
+        "Answer ONLY the new question in [Current Question]. If it changes topic,"
+        " switch fully and do not continue the previous answer.",
+        "",
+        "[Earlier turns]",
+    ]
     for turn in recent:
         role = turn.get("role", "user").capitalize()
-        content = turn.get("content", "")
+        content = (turn.get("content", "") or "").strip()
+        if role == "Assistant" and len(content) > 300:
+            content = content[:300].rstrip() + " …[earlier answer trimmed]"
+        else:
+            content = content[:600]
         lines.append(f"{role}: {content}")
     lines.append("")
-    lines.append(f"[Current Message]\n{user_message}")
+    lines.append(f"[Current Question]\n{user_message}")
     return "\n".join(lines)
 
 
