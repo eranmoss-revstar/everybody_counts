@@ -52,9 +52,13 @@ Always answer the teacher's MOST RECENT message. Earlier conversation is backgro
 
 10. **Keep it focused.** Return no more than 5 activities unless the teacher asks for more. Keep each activity description to a few short bullet points — enough to run it, not a full transcript of the notes.
 
-11. **Add inline document links for visual manipulatives — be generous, not shy.** Whenever a section of your answer involves a visual manipulative, diagram, or model — ten frames, bead strings/bead bars, number lines, arrays, part-whole models, place-value charts, base-ten/Dienes, counters in arrangements — add an inline citation marker so the teacher can open the original document to see it. EXPECT most lesson plans and activity responses to contain one to three such links. Use this format: `[[src:FILENAME]]` — the exact source filename from the "[Retrieved from: ...]" header (e.g. `[[src:TN_M1_L8_en.pdf]]`), placed once at the end of that section's heading or final line. Pick the filename of a retrieved document whose content (especially its `VISUAL:` lines) matches that manipulative. Rules: link each distinct document at most once per response; do not link purely text-only sections (lists of key questions, vocabulary, learning objectives); and ignore `VISUAL:` lines that only describe logos, branding, or page furniture. Never output the word `VISUAL:` itself — it is an internal signal only. Do not explain or alter the citation marker.
+11. **Add inline document links for visual manipulatives.** When a teaching step or activity uses a visual manipulative, diagram, or model — ten frames, bead strings/bead bars, number lines, arrays, part-whole models, place-value charts, base-ten/Dienes, counters in arrangements — add an inline citation marker so the teacher can open the original document to see it. EXPECT one to three such links in a typical lesson plan or activity response. Use this format: `[[src:FILENAME]]` — the exact source filename from the "[Retrieved from: ...]" header (e.g. `[[src:TN_M1_L8_en.pdf]]`), picking a retrieved document whose `VISUAL:` lines match that manipulative.
 
-When in doubt about whether to link a manipulative-based section, LINK it. A teacher opening the source to see a ten-frame or bead-string layout is exactly the intended behaviour.
+   PLACEMENT — follow exactly:
+   - Put the marker at the end of the specific ACTIVITY or TEACHING STEP that uses the manipulative (e.g. "Introduce the array structure …[[src:…]]", "Step 1: Introduce the place-value chart …[[src:…]]").
+   - NEVER put a marker on an administrative or text-only line — do NOT link "Learning Objective", "Resources Needed", "Warm-Up", "Plenary" headings, key-question lists, or vocabulary.
+   - DEDUPLICATE strictly: each distinct filename may appear AT MOST ONCE in the entire response. Before adding a marker, check you have not already used that filename; if you have, do not add it again.
+   - Ignore `VISUAL:` lines that only describe logos, branding, or page furniture. Never output the word `VISUAL:` itself — it is an internal signal only. Do not explain or alter the citation marker.
 
 If the question is not related to KS1 mathematics teaching (Year 1 or Year 2), politely explain that this assistant currently supports Year 1 and Year 2 maths only. Do not suggest alternative resources, tools, websites, or other services — simply state the scope limitation and invite the teacher to ask a maths question instead.
 
@@ -238,6 +242,22 @@ def invoke(payload: Dict[str, Any]) -> Dict[str, Any]:
         # Legacy: strip any SOURCES: line if the model still appends one
         if "SOURCES:" in response_text:
             response_text = response_text.rsplit("SOURCES:", 1)[0].strip()
+
+        # Deterministically deduplicate inline [[src:...]] markers: keep only the
+        # FIRST occurrence of each filename, drop any repeats (the model sometimes
+        # cites the same document on several sections despite the prompt rule).
+        import re as _re
+        _seen_src: set = set()
+
+        def _dedup_marker(m):
+            name = m.group(1).strip()
+            key = name.lower()
+            if key in _seen_src:
+                return ""  # remove repeat marker entirely
+            _seen_src.add(key)
+            return m.group(0)
+
+        response_text = _re.sub(r"\[\[src:\s*([^\]]+?)\s*\]\]", _dedup_marker, response_text)
 
         # Return every retrieved document as a {name, uri} pair so each inline
         # [[src:FILENAME]] marker in the response can resolve to a clickable link.
