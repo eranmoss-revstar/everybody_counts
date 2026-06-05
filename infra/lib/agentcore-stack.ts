@@ -878,10 +878,12 @@ export class AgentCoreStack extends Stack {
             parsingPrompt: {
               parsingPromptText:
                 "Transcribe all text from this page of a UK KS1 (Year 1–2) maths teaching document. " +
-                "In addition, for every diagram, chart, table, illustration, model, or visual layout on the page, " +
+                "In addition, for every MEANINGFUL mathematical diagram, chart, table, model, or visual layout on the page, " +
                 "write a clear text description of what it shows and how it is arranged, on its own line prefixed with 'VISUAL: '. " +
-                "Describe place-value charts, part-whole models, number lines, arrays, ten-frames, and manipulative arrangements " +
-                "precisely enough that a teacher could picture and recreate them without seeing the original image. " +
+                "Describe place-value charts, part-whole models, number lines, arrays, ten-frames, bead strings, and manipulative " +
+                "arrangements precisely enough that a teacher could picture and recreate them without seeing the original image. " +
+                "Do NOT write a VISUAL line for logos, branding, watermarks, copyright notices, page numbers, headers, footers, " +
+                "or decorative page furniture — ignore those entirely. " +
                 "Preserve the reading order of the page.",
             },
           },
