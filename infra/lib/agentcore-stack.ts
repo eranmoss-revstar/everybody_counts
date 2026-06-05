@@ -925,17 +925,9 @@ export class AgentCoreStack extends Stack {
     });
     agentCoreBucket.grantReadWrite(pptxConverter);
     agentCoreBucket.grantDelete(pptxConverter);
-
-    agentCoreBucket.addEventNotification(
-      s3.EventType.OBJECT_CREATED,
-      new s3n.LambdaDestination(pptxConverter),
-      { prefix: "uploads/", suffix: ".pptx" },
-    );
-    agentCoreBucket.addEventNotification(
-      s3.EventType.OBJECT_CREATED,
-      new s3n.LambdaDestination(pptxConverter),
-      { prefix: "uploads/", suffix: ".ppt" },
-    );
+    // Note: no direct S3 trigger here — S3 forbids overlapping prefix/suffix rules
+    // for the same event. kb-sync is the single uploads/ trigger and dispatches
+    // PPTX to this converter (see below).
 
     // ─── KB Sync Lambda ────────────────────────────────────────────────────
     const kbSyncRole = new iam.Role(this, "KBSyncRole", {
@@ -960,8 +952,12 @@ export class AgentCoreStack extends Stack {
         KB_ID: knowledgeBase.attrKnowledgeBaseId,
         DATA_SOURCE_ID: dataSource.attrDataSourceId,
         REGION: this.region,
+        CONVERTER_FUNCTION_NAME: pptxConverter.functionName,
       },
     });
+
+    // kb-sync dispatches PPTX uploads to the converter instead of ingesting them.
+    pptxConverter.grantInvoke(kbSyncLambda);
 
     agentCoreBucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,

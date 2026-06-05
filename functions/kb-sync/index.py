@@ -1,8 +1,11 @@
 """
 kb-sync Lambda — triggered by S3 ObjectCreated on uploads/*
-Starts a Bedrock Knowledge Base ingestion job to index the new document.
+- PowerPoint (.pptx/.ppt): not a KB-supported format → dispatch to the
+  pptx-converter Lambda, which writes a PDF (re-triggering this function).
+- Everything else: start a Bedrock Knowledge Base ingestion job.
 """
 
+import json
 import boto3
 import os
 import logging
@@ -13,28 +16,38 @@ logger.setLevel(logging.INFO)
 KB_ID = os.environ["KB_ID"]
 DATA_SOURCE_ID = os.environ["DATA_SOURCE_ID"]
 REGION = os.environ.get("REGION", "us-east-1")
+CONVERTER_FUNCTION_NAME = os.environ.get("CONVERTER_FUNCTION_NAME", "")
 
 
 def lambda_handler(event, context):
-    bedrock = boto3.client("bedrock-agent", region_name=REGION)
+    pptx_records = []
+    has_other = False
 
     for record in event.get("Records", []):
         key = record["s3"]["object"]["key"]
-
-        # PowerPoint isn't a supported KB format — the pptx-converter Lambda turns
-        # it into a PDF, which then re-triggers this function. Skip the raw PPTX so
-        # we don't start a pointless ingestion job.
         if key.lower().endswith((".pptx", ".ppt")):
-            logger.info(f"Skipping {key} — awaiting PDF conversion")
-            continue
+            pptx_records.append(record)
+        else:
+            has_other = True
 
-        logger.info(f"New upload detected: {key} — starting ingestion job")
+    # Hand PowerPoint files to the converter (async); the resulting PDF will
+    # re-trigger this function and be ingested then.
+    if pptx_records and CONVERTER_FUNCTION_NAME:
+        lambda_client = boto3.client("lambda", region_name=REGION)
+        lambda_client.invoke(
+            FunctionName=CONVERTER_FUNCTION_NAME,
+            InvocationType="Event",
+            Payload=json.dumps({"Records": pptx_records}).encode("utf-8"),
+        )
+        logger.info(f"Dispatched {len(pptx_records)} PowerPoint file(s) to the converter")
 
+    # Ingest supported formats.
+    if has_other:
+        bedrock = boto3.client("bedrock-agent", region_name=REGION)
         response = bedrock.start_ingestion_job(
             knowledgeBaseId=KB_ID,
             dataSourceId=DATA_SOURCE_ID,
         )
-
         job_id = response["ingestionJob"]["ingestionJobId"]
         logger.info(f"Ingestion job started: {job_id}")
 
