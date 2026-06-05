@@ -81,7 +81,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     sessionManager.extendSession();
 
     const userMessage = {
-      id: Date.now().toString(),
+      id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       content: text,
       role: 'user' as const,
       timestamp: new Date().toISOString()
@@ -110,7 +110,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       setSuggestedQuestions(data.followUpSuggestions);
 
       const assistantMessage = {
-        id: (Date.now() + 1).toString(),
+        id: `a-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
         content: data.response,
         role: 'assistant' as const,
         timestamp: new Date().toISOString(),
@@ -129,7 +129,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       console.error('Error sending message:', error);
 
       const errorMessage = {
-        id: (Date.now() + 1).toString(),
+        id: `e-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
         content: error.message || 'Something went wrong. Please try again.',
         role: 'assistant' as const,
         timestamp: new Date().toISOString(),
