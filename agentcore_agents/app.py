@@ -243,10 +243,28 @@ def invoke(payload: Dict[str, Any]) -> Dict[str, Any]:
         if "SOURCES:" in response_text:
             response_text = response_text.rsplit("SOURCES:", 1)[0].strip()
 
-        # Deterministically deduplicate inline [[src:...]] markers: keep only the
-        # FIRST occurrence of each filename, drop any repeats (the model sometimes
-        # cites the same document on several sections despite the prompt rule).
+        # Clean up inline [[src:...]] markers deterministically (don't rely on the
+        # model getting it perfect):
+        #   1. Strip markers from administrative / text-only header lines
+        #      (Learning Objective, Resources Needed, Warm-Up, Plenary, etc.).
+        #   2. Deduplicate — keep only the FIRST occurrence of each filename.
         import re as _re
+
+        _HEADER_RE = _re.compile(
+            r"(learning objective|resources needed|resources|warm[- ]?up|plenary|"
+            r"key questions?|key vocabulary|vocabulary|success criteria|objective)",
+            _re.IGNORECASE,
+        )
+
+        def _strip_header_markers(line: str) -> str:
+            # If the line (minus markers) is a short admin heading, drop its markers.
+            stripped = _re.sub(r"\[\[src:[^\]]*\]\]", "", line).strip()
+            if _HEADER_RE.search(stripped) and len(stripped) < 60:
+                return _re.sub(r"\s*\[\[src:[^\]]*\]\]", "", line)
+            return line
+
+        response_text = "\n".join(_strip_header_markers(ln) for ln in response_text.split("\n"))
+
         _seen_src: set = set()
 
         def _dedup_marker(m):
