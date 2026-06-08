@@ -237,7 +237,19 @@ def invoke(payload: Dict[str, Any]) -> Dict[str, Any]:
         agent.messages = []
         result = agent(user_message)
 
-        response_text = result.message if hasattr(result, "message") and result.message else str(result)
+        # result.message is a Strands message dict ({"role":..,"content":[{"text":..}]}),
+        # not a string. Extract the plain text before any string processing.
+        raw_msg = result.message if hasattr(result, "message") and result.message else result
+        if isinstance(raw_msg, dict):
+            blocks = raw_msg.get("content", [])
+            if isinstance(blocks, list):
+                response_text = "\n".join(
+                    b["text"] for b in blocks if isinstance(b, dict) and "text" in b
+                )
+            else:
+                response_text = str(blocks)
+        else:
+            response_text = str(raw_msg)
 
         # Legacy: strip any SOURCES: line if the model still appends one
         if "SOURCES:" in response_text:
