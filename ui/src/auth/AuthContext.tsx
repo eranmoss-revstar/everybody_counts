@@ -20,6 +20,9 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   needsNewPassword: boolean;
   completeNewPassword: (newPassword: string) => Promise<void>;
+  needsPasswordReset: boolean;
+  resetEmail: string;
+  clearPasswordReset: () => void;
   logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
   getIdToken: () => string | null;
@@ -66,6 +69,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | null>(null);
   const [needsNewPassword, setNeedsNewPassword] = useState(false);
+  const [needsPasswordReset, setNeedsPasswordReset] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
 
   const checkAuthState = useCallback(async () => {
     try {
@@ -96,6 +101,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       // Admin-created user logging in for the first time → show the set-password screen.
       if (result.challenge === 'NEW_PASSWORD_REQUIRED') {
         setNeedsNewPassword(true);
+        return;
+      }
+
+      // Password was reset by an admin → route to the code-based reset flow.
+      if (result.challenge === 'RESET_REQUIRED') {
+        setResetEmail(email);
+        setNeedsPasswordReset(true);
         return;
       }
 
@@ -148,6 +160,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     login,
     needsNewPassword,
     completeNewPassword,
+    needsPasswordReset,
+    resetEmail,
+    clearPasswordReset: () => setNeedsPasswordReset(false),
     logout,
     refreshToken,
     getIdToken: () => idToken,

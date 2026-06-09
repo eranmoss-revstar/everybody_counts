@@ -4,11 +4,12 @@ import { useAuth } from '../../auth/AuthContext';
 
 interface ForgotPasswordProps {
   onBack: () => void;
+  initialEmail?: string;
 }
 
-const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack }) => {
+const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, initialEmail = '' }) => {
   const [step, setStep] = useState<'email' | 'reset'>('email');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail);
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -91,7 +92,9 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack }) => {
         </h2>
         <p className={`text-sm mt-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
           {step === 'email'
-            ? 'Enter your email to receive a reset code'
+            ? (initialEmail
+                ? 'Your password needs to be reset. Send a code to your email to set a new one.'
+                : 'Enter your email to receive a reset code')
             : `Enter the code sent to ${email}`}
         </p>
       </div>

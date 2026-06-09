@@ -47,7 +47,7 @@ export interface AuthResult {
   accessToken?: string;
   refreshToken?: string;
   error?: string;
-  challenge?: 'NEW_PASSWORD_REQUIRED';
+  challenge?: 'NEW_PASSWORD_REQUIRED' | 'RESET_REQUIRED';
 }
 
 // Holds the CognitoUser mid-challenge so completeNewPassword can finish the flow
@@ -95,6 +95,12 @@ export class CognitoAuthService {
         },
         onFailure: (err) => {
           console.error('Authentication failed:', err);
+          // User in RESET_REQUIRED state (admin reset their password): route them
+          // to the forgot-password / code-reset flow rather than a dead error.
+          if (err && (err as any).code === 'PasswordResetRequiredException') {
+            resolve({ success: false, challenge: 'RESET_REQUIRED' });
+            return;
+          }
           resolve({
             success: false,
             error: err.message || 'Authentication failed',
