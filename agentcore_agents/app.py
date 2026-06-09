@@ -52,7 +52,7 @@ Always answer the teacher's MOST RECENT message. Earlier conversation is backgro
 
 10. **Keep it focused.** Return no more than 5 activities unless the teacher asks for more. Keep each activity description to a few short bullet points — enough to run it, not a full transcript of the notes.
 
-11. **Add inline document links for visual manipulatives.** When a teaching step or activity uses a visual manipulative, diagram, or model — ten frames, bead strings/bead bars, number lines, arrays, part-whole models, place-value charts, base-ten/Dienes, counters in arrangements — add an inline citation marker so the teacher can open the original document to see it. EXPECT one to three such links in a typical lesson plan or activity response. Use this format: `[[src:FILENAME]]` — the exact source filename from the "[Retrieved from: ...]" header (e.g. `[[src:TN_M1_L8_en.pdf]]`), picking a retrieved document whose `VISUAL:` lines match that manipulative.
+11. **Add inline document links for visual manipulatives.** When a teaching step or activity uses a visual manipulative, diagram, or model — ten frames, bead strings/bead bars, number lines, arrays, part-whole models, place-value charts, base-ten/Dienes, counters in arrangements — add an inline citation marker so the teacher can open the original document to see it. EXPECT one to three such links in a typical lesson plan or activity response. Use this format: `[[src:FILENAME]]` (e.g. `[[src:TN_M1_L8_en.pdf]]`). CRITICAL — correct attribution: each retrieved block is prefixed with `[Document: FILENAME]`. The FILENAME you cite MUST be the one prefixing the block that actually contains the matching `VISUAL:` description. Do not guess or cite a different document — find the `[Document: ...]` header above the visual you are using and copy that exact filename.
 
    PLACEMENT — follow exactly:
    - Put the marker at the end of the specific ACTIVITY or TEACHING STEP that uses the manipulative (e.g. "Introduce the array structure …[[src:…]]", "Step 1: Introduce the place-value chart …[[src:…]]").
@@ -138,24 +138,30 @@ def _ensure_tool():
 
         global _retrieval_source_map
         sources = []
-        chunks = []
         seen = set()
+        blocks = []
         for r in results:
             text = r.get("content", {}).get("text", "")
             uri = r.get("location", {}).get("s3Location", {}).get("uri", "")
-            if uri:
-                name = uri.split("/")[-1]
-                if name and name not in seen:
-                    seen.add(name)
-                    sources.append(name)
-                    _retrieval_source_map[name] = uri
+            name = uri.split("/")[-1] if uri else "unknown"
+            if uri and name not in seen:
+                seen.add(name)
+                sources.append(name)
+                _retrieval_source_map[name] = uri
             if text:
-                chunks.append(text)
+                # Tag EVERY chunk with its own source filename so the agent can
+                # attribute each VISUAL: description to the correct document. A
+                # combined header loses this mapping and causes mis-grounded links.
+                blocks.append(f"[Document: {name}]\n{text}")
 
-        context = "\n\n---\n\n".join(chunks)
-        sources_str = ", ".join(sources) if sources else "unknown"
-        logger.info(f"TOOL: retrieved {len(chunks)} chunks from {sources}")
-        return f"[Retrieved from: {sources_str}]\n\n{context}"
+        context = "\n\n---\n\n".join(blocks)
+        logger.info(f"TOOL: retrieved {len(blocks)} chunks from {sources}")
+        return (
+            "Each block below is prefixed with the document it came from "
+            "([Document: FILENAME]). When you add a [[src:FILENAME]] link for a "
+            "visual, use the FILENAME of the block that actually contains that "
+            f"visual.\n\n{context}"
+        )
 
     _retrieve_tool = retrieve_teaching_materials
 
