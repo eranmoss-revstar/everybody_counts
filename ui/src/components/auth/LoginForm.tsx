@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../auth/AuthContext';
+import SetNewPassword from './SetNewPassword';
 
 interface LoginFormProps {
   onForgotPassword: () => void;
@@ -11,8 +12,13 @@ const LoginForm: React.FC<LoginFormProps> = ({ onForgotPassword }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { login, authMode } = useAuth();
+  const { login, authMode, needsNewPassword } = useAuth();
   const { isDarkMode } = useTheme();
+
+  // First login for an admin-created user → show the set-password screen instead.
+  if (needsNewPassword) {
+    return <SetNewPassword />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

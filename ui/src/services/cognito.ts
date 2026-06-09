@@ -47,7 +47,13 @@ export interface AuthResult {
   accessToken?: string;
   refreshToken?: string;
   error?: string;
+  challenge?: 'NEW_PASSWORD_REQUIRED';
 }
+
+// Holds the CognitoUser mid-challenge so completeNewPassword can finish the flow
+// on the SAME instance (required by amazon-cognito-identity-js).
+let _pendingUser: CognitoUser | null = null;
+let _pendingAttributes: Record<string, string> = {};
 
 export class CognitoAuthService {
   /**
@@ -94,13 +100,44 @@ export class CognitoAuthService {
             error: err.message || 'Authentication failed',
           });
         },
-        newPasswordRequired: (userAttributes, requiredAttributes) => {
-          // Handle new password requirement
-          console.log('New password required');
-          resolve({
-            success: false,
-            error: 'New password required. Please contact administrator.',
-          });
+        newPasswordRequired: (userAttributes) => {
+          // First login for an admin-created user: keep this CognitoUser instance
+          // so completeNewPassword() can finish the challenge. Cognito rejects
+          // immutable attributes (email_verified, email) on the challenge call, so
+          // strip them from what we echo back.
+          _pendingUser = cognitoUser;
+          const { email_verified, email, ...rest } = userAttributes || {};
+          _pendingAttributes = rest;
+          resolve({ success: false, challenge: 'NEW_PASSWORD_REQUIRED' });
+        },
+      });
+    });
+  }
+
+  /**
+   * Complete the NEW_PASSWORD_REQUIRED challenge with a password the user chooses.
+   * Must be called after signIn() returned challenge: 'NEW_PASSWORD_REQUIRED'.
+   */
+  static async completeNewPassword(newPassword: string): Promise<AuthResult> {
+    return new Promise((resolve) => {
+      if (!_pendingUser) {
+        resolve({ success: false, error: 'No pending sign-in. Please log in again.' });
+        return;
+      }
+      _pendingUser.completeNewPasswordChallenge(newPassword, _pendingAttributes, {
+        onSuccess: (session: CognitoUserSession) => {
+          const idToken = session.getIdToken().getJwtToken();
+          const accessToken = session.getAccessToken().getJwtToken();
+          const refreshToken = session.getRefreshToken().getToken();
+          localStorage.setItem('auth_token', idToken);
+          localStorage.setItem('access_token', accessToken);
+          localStorage.setItem('refresh_token', refreshToken);
+          _pendingUser = null;
+          _pendingAttributes = {};
+          resolve({ success: true, message: 'Password set', idToken, accessToken, refreshToken });
+        },
+        onFailure: (err) => {
+          resolve({ success: false, error: err.message || 'Could not set new password' });
         },
       });
     });

@@ -18,6 +18,8 @@ interface AuthContextType {
   isLoading: boolean;
   authMode: AuthMode;
   login: (email: string, password: string) => Promise<void>;
+  needsNewPassword: boolean;
+  completeNewPassword: (newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
   getIdToken: () => string | null;
@@ -63,6 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | null>(null);
+  const [needsNewPassword, setNeedsNewPassword] = useState(false);
 
   const checkAuthState = useCallback(async () => {
     try {
@@ -89,11 +92,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setIsLoading(true);
     try {
       const result = await AuthService.signIn(email, password);
+
+      // Admin-created user logging in for the first time → show the set-password screen.
+      if (result.challenge === 'NEW_PASSWORD_REQUIRED') {
+        setNeedsNewPassword(true);
+        return;
+      }
+
       if (!result.success) throw new Error(result.error);
 
       const claims = AuthService.getIdTokenClaims();
       setUser(userFromClaims(claims || {}, email));
       setIdToken(result.idToken || localStorage.getItem('auth_token'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const completeNewPassword = async (newPassword: string) => {
+    setIsLoading(true);
+    try {
+      const result = await AuthService.completeNewPassword(newPassword);
+      if (!result.success) throw new Error(result.error);
+
+      const claims = AuthService.getIdTokenClaims();
+      setUser(userFromClaims(claims || {}));
+      setIdToken(result.idToken || localStorage.getItem('auth_token'));
+      setNeedsNewPassword(false);
     } finally {
       setIsLoading(false);
     }
@@ -121,6 +146,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     isLoading,
     authMode: AUTH_MODE,
     login,
+    needsNewPassword,
+    completeNewPassword,
     logout,
     refreshToken,
     getIdToken: () => idToken,

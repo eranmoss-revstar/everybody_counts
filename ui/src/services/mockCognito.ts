@@ -35,6 +35,11 @@ function buildMockToken(email: string): string {
 }
 
 export class MockCognitoAuthService {
+  // Mock mode never issues the challenge; present for interface parity.
+  static async completeNewPassword(_newPassword: string): Promise<AuthResult> {
+    return { success: true, message: 'Password set (mock)' };
+  }
+
   static async signIn(username: string, password: string): Promise<AuthResult> {
     await delay(400);
     const looksLikeEmail = username.includes('@');
