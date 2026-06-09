@@ -225,40 +225,74 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       {/* Messages Area */}
       <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-6 relative">
         {session.messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center max-w-md animate-fade-in">
-              <h3 className={`text-xl font-semibold mb-4 transition-colors duration-500 ${
+          <div className="flex items-center justify-center h-full py-6">
+            <div className="text-center max-w-2xl animate-fade-in">
+              <h3 className={`text-xl font-semibold mb-1 transition-colors duration-500 ${
                 isDarkMode ? 'text-slate-100' : 'text-slate-700'
               }`}>
                 How can I help you today?
               </h3>
-              <div className="space-y-3">
-                {[
-                  "Give me some assessment questions for a Year 1 class across the curriculum",
-                  "I have just taught counting and comparing numbers to 20 in Year 1 — based on the current lesson sequence, what is the next lesson I should teach?",
-                  "I have just taught addition and subtraction facts within 10 in Year 1 — based on the current lesson sequence, what is the next lesson I should teach?",
-                  "I have just taught place value (tens and ones) in Year 2 — based on the current lesson sequence, what is the next lesson I should teach?",
-                  "How do I introduce counting within 100 to my Year 1 class?",
-                  "What manipulatives are recommended for teaching number bonds to 10 in Year 1?",
-                  "How can I use part-whole models to teach addition in Year 1?",
-                  "How do the Year 2 materials approach teaching fractions for the first time?",
-                ].map((suggestion, index) => (
-                  <button
-                    key={index}
-                    onClick={() => {
-                      setInputMessage(suggestion);
-                      setTimeout(() => handleSendMessage(), 100);
-                    }}
-                    className={`w-full px-4 py-3 rounded-xl text-sm text-left transition-all duration-300 hover:scale-105 ${
-                      isDarkMode
-                        ? 'bg-slate-700/30 hover:bg-slate-700/50 text-slate-300'
-                        : 'bg-blue-50 hover:bg-blue-100 text-blue-700'
-                    }`}
-                  >
-                    "{suggestion}"
-                  </button>
-                ))}
-              </div>
+              <p className={`text-xs mb-5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                Try one of these — items marked 📎 include links to the original teaching documents.
+              </p>
+              {[
+                {
+                  group: 'Visual manipulatives (show source links)',
+                  items: [
+                    { q: 'How can I use part-whole models to teach addition in Year 1?', visual: true },
+                    { q: 'How do I use ten frames to teach addition facts within 10?', visual: true },
+                    { q: 'How do I use arrays to teach multiplication in Year 2?', visual: true },
+                    { q: 'How do I use a place-value chart to teach tens and ones in Year 2?', visual: true },
+                    { q: 'Give me activities to teach number bonds to 10 using a bead string in Year 1.', visual: true },
+                    { q: 'How do I use a number line to compare numbers to 20 in Year 1?', visual: true },
+                  ],
+                },
+                {
+                  group: 'Activities & lessons',
+                  items: [
+                    { q: 'Fun activities for teaching number bonds to 10 in Year 1.', visual: true },
+                    { q: 'What hands-on activities help children learn doubling in Year 2?', visual: true },
+                    { q: 'Create a lesson on counting in 2s for Year 1.', visual: true },
+                    { q: 'What activities are there for number bonds across Year 1 — to 5, 6, 7, 8, 9 and 10?', visual: true },
+                  ],
+                },
+                {
+                  group: 'Sequencing & assessment',
+                  items: [
+                    { q: 'I have just taught counting and comparing numbers to 20 in Year 1 — what is the next lesson I should teach?', visual: false },
+                    { q: 'I just finished addition and subtraction facts within 10 — what comes next?', visual: false },
+                    { q: 'Give me some assessment questions for a Year 1 class across the curriculum.', visual: false },
+                    { q: 'How do the Year 2 materials approach teaching fractions for the first time?', visual: false },
+                  ],
+                },
+              ].map((cat) => (
+                <div key={cat.group} className="mb-4 text-left">
+                  <p className={`text-[11px] font-semibold uppercase tracking-wide mb-2 px-1 ${
+                    isDarkMode ? 'text-slate-500' : 'text-slate-400'
+                  }`}>
+                    {cat.group}
+                  </p>
+                  <div className="grid sm:grid-cols-2 gap-2">
+                    {cat.items.map((item, index) => (
+                      <button
+                        key={index}
+                        onClick={() => {
+                          setInputMessage(item.q);
+                          setTimeout(() => handleSendMessage(), 100);
+                        }}
+                        className={`px-3 py-2.5 rounded-xl text-sm text-left transition-all duration-300 hover:scale-[1.02] flex items-start gap-2 ${
+                          isDarkMode
+                            ? 'bg-slate-700/30 hover:bg-slate-700/50 text-slate-300'
+                            : 'bg-blue-50 hover:bg-blue-100 text-blue-700'
+                        }`}
+                      >
+                        {item.visual && <span className="flex-shrink-0 mt-0.5">📎</span>}
+                        <span>{item.q}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         ) : (
