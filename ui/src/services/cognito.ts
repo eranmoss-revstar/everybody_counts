@@ -95,15 +95,20 @@ export class CognitoAuthService {
         },
         onFailure: (err) => {
           console.error('Authentication failed:', err);
+          // The exception type may land on .code, .name, or in .message depending
+          // on the amazon-cognito-identity-js version — check all three.
+          const e = err as any;
+          const kind = e?.code || e?.name || '';
+          const msg = e?.message || '';
           // User in RESET_REQUIRED state (admin reset their password): route them
           // to the forgot-password / code-reset flow rather than a dead error.
-          if (err && (err as any).code === 'PasswordResetRequiredException') {
+          if (kind === 'PasswordResetRequiredException' || msg.includes('Password reset required')) {
             resolve({ success: false, challenge: 'RESET_REQUIRED' });
             return;
           }
           resolve({
             success: false,
-            error: err.message || 'Authentication failed',
+            error: msg || 'Authentication failed',
           });
         },
         newPasswordRequired: (userAttributes) => {
